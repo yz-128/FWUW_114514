@@ -1,0 +1,17 @@
+pluginManagement {
+    repositories {
+        // 阿里云镜像优先（国内加速）
+        maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url = 'https://maven.aliyun.com/repository/public' }
+        maven { url = 'https://maven.aliyun.com/repository/central' }
+        // NeoForge 官方仓库（ModDevGradle 插件本体）
+        maven { url = 'https://maven.neoforged.net/releases' }
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'flansmod'

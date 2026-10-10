@@ -1,0 +1,142 @@
+{
+  "packs": [
+    {
+      "pack": "EscapeFromTarcraftReforged_1.5.3",
+      "files": 1915,
+      "definitions": 402,
+      "models": 367,
+      "ogg": 281,
+      "categories": {
+        "bullets": 75,
+        "attachments": 237,
+        "grenades": 1,
+        "guns": 66,
+        "armorFiles": 23
+      },
+      "soundEvents": 194
+    },
+    {
+      "pack": "OctagonWeaponsReforged_1.33",
+      "files": 839,
+      "definitions": 143,
+      "models": 194,
+      "ogg": 89,
+      "categories": {
+        "bullets": 8,
+        "attachments": 100,
+        "grenades": 6,
+        "guns": 14,
+        "armorFiles": 15
+      },
+      "soundEvents": 83
+    },
+    {
+      "pack": "[FMUM]EscapeFromTarCraft-Armor",
+      "files": 275,
+      "definitions": 53,
+      "models": 51,
+      "ogg": 20,
+      "categories": {
+        "armorFiles": 53
+      },
+      "soundEvents": 20
+    },
+    {
+      "pack": "[FMUM]EscapeFromTarCraft-Armor(Scav)",
+      "files": 175,
+      "definitions": 27,
+      "models": 51,
+      "ogg": 1,
+      "categories": {
+        "armorFiles": 27
+      },
+      "soundEvents": 1
+    },
+    {
+      "pack": "[FMUM]EscapeFromTarCraft-Guns",
+      "files": 1850,
+      "definitions": 444,
+      "models": 456,
+      "ogg": 244,
+      "categories": {
+        "bullets": 76,
+        "attachments": 284,
+        "grenades": 1,
+        "guns": 83
+      },
+      "soundEvents": 191
+    },
+    {
+      "pack": "[FMUM]EscapeFromTarCraft-Misc",
+      "files": 254,
+      "definitions": 125,
+      "models": 0,
+      "ogg": 0,
+      "categories": {
+        "parts": 101,
+        "tools": 24
+      },
+      "soundEvents": 0
+    },
+    {
+      "pack": "[FMUM]EscapeFromTarCraft-Plus",
+      "files": 39,
+      "definitions": 14,
+      "models": 3,
+      "ogg": 4,
+      "categories": {
+        "bullets": 7,
+        "guns": 3,
+        "tools": 4
+      },
+      "soundEvents": 1
+    },
+    {
+      "pack": "[FMUM]EscapeFromTarCraft-Server",
+      "files": 22,
+      "definitions": 9,
+      "models": 0,
+      "ogg": 0,
+      "categories": {
+        "parts": 9
+      },
+      "soundEvents": 0
+    }
+  ],
+  "disabled": [
+    "_disabled"
+  ],
+  "definitions": 1217,
+  "uniqueItems": 860,
+  "duplicateItems": 357,
+  "registeredItemGroups": {
+    "ammo": 145,
+    "attachments": 415,
+    "guns": 63,
+    "parts": 138,
+    "teams": 99
+  },
+  "unionSoundEvents": 299,
+  "servedSoundEvents": 299,
+  "hiddenSoundEvents": 0,
+  "audioReferences": 625,
+  "missingAudioReferences": 4,
+  "invalidOggHeaders": 0,
+  "typeSoundReferences": 1737,
+  "missingTypeSoundReferences": 26,
+  "modelReferences": 1582,
+  "missingModelReferences": 1,
+  "eftCasingReferences": 73,
+  "eftResolvedCasings": 64,
+  "disabledArchives": [
+    {
+      "archive": "[解压食用]1.33OctagonWeaponsReforged.zip",
+      "files": 839,
+      "root": "OctagonWeaponsReforged_1.33/",
+      "models": 194,
+      "ogg": 89,
+      "identicalFilesInEnabledFolder": 839,
+      "sameAsEnabledFolder": true
+    }
+  ]
+}

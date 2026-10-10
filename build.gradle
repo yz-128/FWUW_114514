@@ -1,0 +1,202 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.148'
+    id 'idea'
+}
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+version = mod_version
+group = mod_group_id
+
+// The mod ids this jar ships. The port is a single mod again, as it was in 1.7.10 —
+// content lives in content packs under Flan/, not in extra namespaces.
+ext.modIds = [
+        'flansmod',
+]
+
+sourceSets.main.resources {
+    srcDir('src/generated/resources')
+    exclude("**/*.bbmodel") // BlockBench project files
+    exclude("src/generated/**/.cache") // datagen cache files
+}
+
+repositories {
+    // 阿里云镜像优先（国内加速）
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+    maven { url = 'https://maven.aliyun.com/repository/central' }
+    maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+    // NeoForge 官方（Minecraft / NeoForge / Parchment 等国内无镜像的构件）
+    maven { url = 'https://maven.neoforged.net/releases' }
+    // JEI
+    maven {
+        name = "BlameJared"
+        url = 'https://maven.blamejared.com/'
+    }
+}
+
+base {
+    archivesName = mod_id
+}
+
+// Mojang ships Java 21 to end users in 1.21.1, so mods should target Java 21.
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+// The format-neutral pack engine lives in the new standalone project. Compile the
+// same JDK-only sources into this compatibility build; no extra runtime mod is needed.
+sourceSets.main.java.srcDir('../PackArms-1.21.1/pack-core/src/main/java')
+
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    // Access Transformers are auto-detected at src/main/resources/META-INF/accesstransformer.cfg
+    validateAccessTransformers = true
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        // Loads straight into an existing world so the client can be driven unattended.
+        // The level id must match a folder under run/saves/; override with -PflansWorld=<name>
+        // (a copy of a save, so a world another client has open is never fought over).
+        clientAuto {
+            client()
+            programArguments.addAll '--quickPlaySingleplayer', (project.findProperty('flansWorld') ?: '新的世界').toString()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            // -PflansCapture turns on the self-verification harness: it hands the player a gun and
+            // ammunition, fires through the mod's own API (never synthetic input) and keeps a few
+            // screenshots, so the port can be checked without anyone at the keyboard.
+            if (project.hasProperty('flansCapture'))
+                systemProperty 'flansmod.debugCapture', 'true'
+            // -PflansProbe turns on the pose probe: a few frames around each capture tick dump
+            // the gun's and the arm's pose matrices and boxes, so a screenshot that shows nothing
+            // can be told apart from a pose that missed the frame (or was never applied).
+            if (project.hasProperty('flansProbe'))
+                systemProperty 'flansmod.probePose', 'true'
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        gameTestServer {
+            type = "gameTestServer"
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        data {
+            data()
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        // One entry per @Mod class in this source set, since the jar ships eight mods.
+        project.modIds.each { id ->
+            "${id}" {
+                sourceSet(sourceSets.main)
+            }
+        }
+    }
+}
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    // javax.annotation.Nonnull / Nullable are used across the codebase and are not
+    // shipped by NeoForge.
+    compileOnly "com.google.code.findbugs:jsr305:${jsr305_version}"
+
+    // JEI: API at compile time, full jar only in the dev runtime.
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+    compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
+    localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
+
+    // ASM, for reading the 1.7.10 content-pack model classes at runtime. Minecraft itself
+    // ships ASM (ModLauncher and Mixin both depend on it), so this is compile-time only: the
+    // version on the game's class path is the one that will be used, which is exactly what is
+    // wanted — it can never clash with the loader's own copy.
+    compileOnly "org.ow2.asm:asm:${asm_version}"
+    compileOnly "org.ow2.asm:asm-tree:${asm_version}"
+    compileOnly "org.ow2.asm:asm-analysis:${asm_version}"
+}
+
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_credits            : mod_credits,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/repo"
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// Offline EFT inspection uses the same compiled readers and mapped game classes, without
+// launching Minecraft. Include compile-only ASM and the vanilla player-skin resources.
+def offlineRuntimeClasspath = files(sourceSets.main.runtimeClasspath, sourceSets.main.compileClasspath,
+        fileTree('build/moddev/artifacts') { include '*minecraft-resources.jar' })
+def offlineClasspathOutput = file('build/offline-classpath.txt')
+tasks.register('writeOfflineClasspath') {
+    dependsOn tasks.named('classes')
+    inputs.files(offlineRuntimeClasspath)
+    outputs.file(offlineClasspathOutput)
+    doLast {
+        def entries = offlineRuntimeClasspath.files
+                .findAll { !it.name.contains('natives-') }.collect { it.absolutePath }.unique()
+        offlineClasspathOutput.text = entries.join(File.pathSeparator)
+    }
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

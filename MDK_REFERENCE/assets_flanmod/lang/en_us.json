@@ -1,0 +1,13 @@
+{
+  "itemGroup.flanmod": "Example Mod Tab",
+  "block.flanmod.example_block": "Example Block",
+  "item.flanmod.example_item": "Example Item",
+
+  "flanmod.configuration.title": "FLAN_Mod Configs",
+  "flanmod.configuration.section.flanmod.common.toml": "FLAN_Mod Configs",
+  "flanmod.configuration.section.flanmod.common.toml.title": "FLAN_Mod Configs",
+  "flanmod.configuration.items": "Item List",
+  "flanmod.configuration.logDirtBlock": "Log Dirt Block",
+  "flanmod.configuration.magicNumberIntroduction": "Magic Number Text",
+  "flanmod.configuration.magicNumber": "Magic Number"
+}

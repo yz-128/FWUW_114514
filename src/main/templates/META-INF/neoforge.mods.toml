@@ -1,0 +1,40 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="${mod_authors}"
+credits="${mod_credits}"
+description='''
+An UNOFFICIAL port of Flan's Mod to NeoForge 1.21.1, built on the 1.7.10 sources.
+
+Based on Flan's Mod by Flan (jamioflan). The 1.7.10 continuation this port works from is
+Flan's Mod Ultimate (FMUM) and Flan's Mod Ultimate 2.0; behaviour and code were transcribed
+from them. This is not an official Flan's Mod release and is not affiliated with or endorsed
+by the original authors.
+
+Licensed CC BY-NC-SA 3.0, the licence the work it derives from carries: attribution required,
+no commercial use, derivatives under the same licence.
+
+This port reads the original content packs directly: put them in the Flan/ folder next to
+the game directory (loose folders or .zip/.jar) and their guns, vehicles, planes, armour and
+parts are loaded from the same .txt definitions and .class models the 1.7.10 mod used.
+Content packs are NOT bundled; install them separately from their own authors.
+'''
+
+[[dependencies.${mod_id}]]
+modId="neoforge"
+type="required"
+versionRange="[${neo_version},)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="minecraft"
+type="required"
+versionRange="${minecraft_version_range}"
+ordering="NONE"
+side="BOTH"
