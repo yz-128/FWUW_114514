@@ -33,6 +33,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import com.flansmod.client.SightFoldAnimations;
 
 /**
  * Draws a content-pack item the way 1.7.10 did.
@@ -149,6 +150,9 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 			return;
 
 		InfoType type = flan.type;
+		if(type instanceof GunType gun) type = com.flansmod.common.GunAttachments.view(gun,stack);
+		var folding=type instanceof GunType gun?SightFoldAnimations.forStack(stack,gun,displayContext,
+				Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true)):SightFoldAnimations.Frame.IDLE;
 
 		// The inventory draws the pack's flat icon, which is what 1.7.10 did: none of its
 		// renderers claimed the inventory context, so vanilla drew the item's icon there.
@@ -219,11 +223,18 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 			else applyRecoil(pose,rig,animation,partial);
 		}
 
-		// Sight pivot follows recoil, before both gun geometry and arms (EFT core 1.1).
+		// Sight pivot follows recoil, before both gun geometry and arms (EFT core 1.1). The target is
+		// the camera's actual position in gun space, not 1.7.10's fixed 0.4, because that constant
+		// only matches the one pose the pack tuned it against (see FmumFirstPersonPose.aim).
 		if(type instanceof GunType gun && displayContext.firstPerson() && FmumFirstPersonPose.hasPose(rig.animation))
-			pose.mulPose(FmumFirstPersonPose.aim(new org.joml.Matrix4f(), gun,
-					FmumActionPose.ads(rig.animation,actionFrame(Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true)),
-							AimState.blend(Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true)))));
+		{
+			float partial=Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
+			float aimAds=FmumActionPose.ads(rig.animation,actionFrame(partial),AimState.blend(partial));
+			var eye=FmumFirstPersonPose.eyeInGunSpace(pose.last().pose());
+			pose.mulPose(FmumFirstPersonPose.aim(new org.joml.Matrix4f(),folding.active()?folding.aimView():gun,
+					aimAds,eye));
+		}
+		if(displayContext.firstPerson() && folding.active())pose.mulPose(SightFoldPose.weapon(new org.joml.Matrix4f(),folding.progress()));
 		// Diagnostic: at the capture ticks, dump the gun's pose matrix and its box in view space.
 		if(probeWindow())
 			probePose("gun:" + type.shortName, pose, rig);
@@ -239,9 +250,8 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 		// assembly moves together.
 		if(type instanceof com.flansmod.common.types.GunType gun && !gun.defaultAttachments.isEmpty())
 		{
-			for(java.util.List<ModifiableType.DefaultAttachment> group : gun.defaultAttachments)
-				renderAttachments(pose, buffers, gun, group, mirrored, light, overlay,
-						displayContext.firstPerson()?partMotion(gun,rig,stack):null);
+			renderAttachments(pose,buffers,gun,gun.defaultAttachments.stream().flatMap(List::stream).toList(),mirrored,light,overlay,
+					displayContext.firstPerson()?partMotion(gun,rig,stack):null,folding,new int[0]);
 		}
 		if(type instanceof GunType gun && gun.itsType!=GunType.GunItsType.MAG)
 			renderMagazine(pose,buffers,gun,stack,rig,displayContext.firstPerson(),mirrored,light,overlay);
@@ -253,7 +263,7 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 		// "a rifle is floating in the corner of the screen". FMUM draws these last, inside the
 		// same pose, and only in first person: in third person the player's own model arm shows.
 		if(type instanceof com.flansmod.common.types.GunType gun && displayContext.firstPerson())
-			renderArms(pose, buffers, gun, rig, mirrored, light, overlay);
+			renderArms(pose, buffers, gun, rig, mirrored, light, overlay,folding);
 		if(type instanceof GunType gun)
 			MuzzleEffectsRenderer.render(pose,buffers,gun,stack,displayContext,rig.animation,light,overlay,mirrored);
 
@@ -289,19 +299,19 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 	 * preview is where the placement was verified against the EFT pack.
 	 */
 	private static void renderArms(PoseStack pose, MultiBufferSource buffers, GunType gun, BakedRig gunRig,
-								   boolean mirrored, int light, int overlay)
+								   boolean mirrored, int light, int overlay,SightFoldAnimations.Frame folding)
 	{
 		drawArm(pose, buffers, gun, gunRig, gun.leftArmModel, gun.leftArmTexture,
-				"leftArmPos", "leftArmRot", "leftArmScale", mirrored, light, overlay);
+				"leftArmPos", "leftArmRot", "leftArmScale", mirrored, light, overlay,folding);
 		drawArm(pose, buffers, gun, gunRig, gun.rightArmModel, gun.rightArmTexture,
-				"rightArmPos", "rightArmRot", "rightArmScale", mirrored, light, overlay);
+				"rightArmPos", "rightArmRot", "rightArmScale", mirrored, light, overlay,folding);
 	}
 
 	/** One arm: bake the pack's mesh, apply the model class's pose, bind a skin, draw. */
 	private static void drawArm(PoseStack pose, MultiBufferSource buffers, GunType gun, BakedRig gunRig,
 								String modelRef, String textureName,
 								String posKey, String rotKey, String scaleKey,
-								boolean mirrored, int light, int overlay)
+								boolean mirrored, int light, int overlay,SightFoldAnimations.Frame folding)
 	{
 		if(modelRef == null || modelRef.isBlank() || modelRef.equalsIgnoreCase("None"))
 			return;
@@ -331,8 +341,10 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 
 		pose.pushPose();
 		float partial=Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
-		pose.mulPose(FmumReloadPose.arm(new org.joml.Matrix4f(),model,posKey.startsWith("left"),
-				reloadFrame(partial),actionFrame(partial),gun.modelScale,gun));
+		var armPose=FmumReloadPose.arm(new org.joml.Matrix4f(),model,posKey.startsWith("left"),
+				reloadFrame(partial),actionFrame(partial),gun.modelScale,gun);
+		if(posKey.startsWith("left"))armPose=SightFoldRenderer.arm(armPose,folding,gun);
+		pose.mulPose(armPose);
 
 		// Diagnostic: at the capture ticks, dump the arm's pose matrix and its box in view space.
 		if(probeWindow())
@@ -388,10 +400,13 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 	 */
 	private static void renderAttachments(PoseStack pose, MultiBufferSource buffers, ModifiableType owner,
 										  java.util.List<ModifiableType.DefaultAttachment> nodes,
-										  boolean mirrored, int light, int overlay, PartMotion motion)
+										  boolean mirrored,int light,int overlay,PartMotion motion,SightFoldAnimations.Frame folding,int[] parent)
 	{
+		var indices=new java.util.HashMap<Integer,Integer>();
 		for(ModifiableType.DefaultAttachment node : nodes)
 		{
+			int[] path=java.util.Arrays.copyOf(parent,parent.length+2);
+			path[parent.length]=node.slot;path[parent.length+1]=indices.merge(node.slot,1,Integer::sum)-1;
 			com.flansmod.common.types.AttachmentType at =
 					com.flansmod.common.types.AttachmentType.getAttachment(node.name);
 			if(at == null)
@@ -417,15 +432,33 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 			}
 
 			BakedRig partRig = ModelCache.rigFor(at, at.modelScale);
-			if(partRig != null && !partRig.quads.isEmpty())
+			var foldPart=folding.part(path);
+			boolean animated=foldPart!=null && SightFoldRenderer.render(pose,buffers,foldPart,folding.phase(),light,overlay,mirrored,motion!=null);
+			if(!animated && partRig != null && !partRig.quads.isEmpty())
 			{
+				// An attachment model carries conditional meshes beside its body — a flashlight
+				// cone and a fire-mode indicator. 1.7.10 drew those only when their state was on,
+				// so drawing the whole rig here would leave a cone and selector permanently
+				// visible. ModelAttachment.render() draws exactly one array, and so does this.
+				java.util.List<BakedRig.Quad> body = partRig.quadsByPart.get("attachmentModel");
+				if(body == null || body.isEmpty())
+					body = partRig.quads;
 				VertexConsumer partBuffer = buffers.getBuffer(RenderType.entityCutout(textureFor(at)));
-				if(partBuffer != null)
-					RigRenderer.render(pose, partBuffer, partRig, light, overlay, 1F, 1F, 1F, 1F, mirrored);
+				if(partBuffer != null && !body.isEmpty())
+					RigRenderer.renderPart(pose, partBuffer, body, light, overlay, 1F, 1F, 1F, 1F, mirrored);
 			}
 
-			if(!node.children.isEmpty())
-				renderAttachments(pose, buffers, at, node.children, mirrored, light, overlay,motion);
+			// The sight's reticle model. 1.7.10 kept it in a second model array and drew it only
+			// while the gun was raised; it is not part of the attachment's own mesh, so it cannot
+			// come from the bake above.
+			if(motion!=null && !folding.active())FmumSightRenderer.render(pose,buffers,at,node,motion.gun,partRig,overlay,mirrored);
+
+			if(!node.children.isEmpty()) {
+				pose.pushPose();
+				if(foldPart!=null)pose.mulPose(SightFoldRenderer.children(foldPart,folding.phase(),at));
+				renderAttachments(pose,buffers,at,node.children,mirrored,light,overlay,motion,folding,path);
+				pose.popPose();
+			}
 
 			pose.popPose();
 		}

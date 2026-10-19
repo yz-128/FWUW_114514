@@ -45,7 +45,8 @@ public final class MuzzleEffectsRenderer {
 		localGun=gun;localSlot=slot;
 	}
 	public static void shoot(LivingEntity entity,boolean offHand,GunType gun,Model model,boolean smoke,long seed) {
-		var flash=FmumMuzzlePose.flash(gun,model);
+		var stack=offHand?entity.getOffhandItem():entity.getMainHandItem();
+		var flash=FmumMuzzlePose.flash(com.flansmod.common.GunAttachments.view(gun,stack),model);
 		int count=flash==null?1:flash.textures();
 		var random=new java.util.Random(seed);
 		GunAnimationRegistry.get(entity,offHand).effects.shoot(gun,flash,random.nextInt(count),random.nextFloat()*360F,smoke);
@@ -82,11 +83,11 @@ public final class MuzzleEffectsRenderer {
 		// hand from the render context instead of losing shot frames to reference identity.
 		boolean left=context==ItemDisplayContext.FIRST_PERSON_LEFT_HAND || context==ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
 		boolean offHand=left!=(owner.getMainArm()==net.minecraft.world.entity.HumanoidArm.LEFT);
-		if(InfoType.getType(offHand?owner.getOffhandItem():owner.getMainHandItem())!=gun)return;
+		if(InfoType.getType(offHand?owner.getOffhandItem():owner.getMainHandItem())!=gun.definition())return;
 		GunAnimations animation=GunAnimationRegistry.get(owner,offHand);
 		float partial=mc.getTimer().getGameTimeDeltaPartialTick(true);
 		var flash=FmumMuzzlePose.flash(gun,model);
-		float alpha=animation.effects.gun==gun?animation.effects.alpha(partial):0;
+		float alpha=animation.effects.gun==gun.definition()?animation.effects.alpha(partial):0;
 		if(flash!=null && alpha>=1F/255F && flash.scale()>0F) {
 			var texture=Textures.of(flash.texture(animation.effects.variant),false);
 			var rig=ModelCache.rigForReference(flash.model(),1F,texture);
@@ -106,7 +107,7 @@ public final class MuzzleEffectsRenderer {
 			}
 		}
 		// A shot requests emission once; frame rate, ADS and the number of model parts never repeat it.
-		int shots=animation.effects.takeSmoke(gun);
+		int shots=animation.effects.takeSmoke(gun.definition());
 		if(shots>0 && owner==mc.player) {
 			var camera=mc.gameRenderer.getMainCamera();
 			// Modern hand poses start with the inverse camera rotation; its shader model-view
@@ -121,16 +122,23 @@ public final class MuzzleEffectsRenderer {
 		if(owner==mc.player && !offHand) {
 			var camera=mc.gameRenderer.getMainCamera();
 			var world=FmumWorldEffectsPose.gunToCameraRelativeWorld(pose.last().pose(),camera.rotation(),RenderSystem.getModelViewMatrix());
-			for(var request:animation.effects.takeCases(gun)) {
+			for(var request:animation.effects.takeCases(gun.definition())) {
 				var origin=FmumCasing.origin(model,new Matrix4f(world));
-				if(CASES.size()>=128)CASES.removeFirst();
+				// Cases live four times longer than the packs author, so a high-rate weapon can
+				// have a few hundred on the ground at once. The cap only has to stop unbounded
+				// growth; the rig is tiny and a settled case costs no physics.
+				if(CASES.size()>=256)CASES.removeFirst();
 				CASES.addLast(new WorldCase(new FmumCasing(request.round(),model,world,request.manual(),request.seed(),LegacySightPose.forGun(gun).roll()),
 						camera.getPosition().add(origin.x,origin.y,origin.z)));
 			}
 		}
 		if(context.firstPerson() && !offHand) {
 			if(!ShaderMuzzleRenderer.shadersEnabled())renderSmoke(buffers,light,overlay);
-			renderCases(buffers,new PoseStack(),light,overlay,partial);
+			// Casings are deliberately NOT drawn here. Vanilla clears the depth buffer before the
+			// hand pass so the held item never clips into terrain; anything drawn in this pass is
+			// therefore painted over the world, which is why a case used to show through trees and
+			// why it picked up the hand's item light instead of the light at its own position.
+			// They are drawn from the world stage instead, where depth and light are correct.
 		}
 	}
 	private static void emit(GunType.Smoke spec,Matrix4f point,LivingEntity owner,float roll) {
@@ -147,7 +155,10 @@ public final class MuzzleEffectsRenderer {
 	public static void tick() {
 		for(var smoke:SMOKE)smoke.effect.tick();
 		SMOKE.removeIf(smoke->!smoke.effect.alive());
-		for(var casing:CASES)casing.effect.tick();
+		// Cases collide with the world now, so the tick needs the level and the world-space
+		// origin their local position is relative to.
+		var level=Minecraft.getInstance().level;
+		for(var casing:CASES)casing.effect.tick(level,casing.origin.x,casing.origin.y,casing.origin.z);
 		CASES.removeIf(casing->!casing.effect.alive());
 	}
 	public static void reset() { SMOKE.clear();CASES.clear();renderingEntity=null;localSlot=-1;localGun=null; }
@@ -162,12 +173,13 @@ public final class MuzzleEffectsRenderer {
 		renderingEntity=null;
 		boolean hand=inHandPass();
 		boolean worldSmoke=ShaderSmokeRenderer.inWorld(hand,ShaderMuzzleRenderer.shadersEnabled());
-		if((SMOKE.isEmpty() || !worldSmoke) && (CASES.isEmpty() || hand))return;
+		// Cases are world objects, so they are drawn here whichever camera mode is active.
+		if((SMOKE.isEmpty() || !worldSmoke) && CASES.isEmpty())return;
 		var mc=Minecraft.getInstance();var buffer=mc.renderBuffers().bufferSource();
 		// The shader already includes the level view; account for it exactly once.
 		var pose=new PoseStack();pose.mulPose(FmumWorldEffectsPose.worldStage(event.getModelViewMatrix(),RenderSystem.getModelViewMatrix()));
 		if(worldSmoke)renderSmoke(buffer,pose,LightTexture.FULL_BRIGHT,net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);
-		if(!hand)renderCases(buffer,pose,LightTexture.FULL_BRIGHT,net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,mc.getTimer().getGameTimeDeltaPartialTick(true));
+		renderCases(buffer,pose,net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,mc.getTimer().getGameTimeDeltaPartialTick(true));
 		buffer.endBatch();
 	}
 	private static void renderSmoke(MultiBufferSource buffers,int light,int overlay) {
@@ -189,15 +201,22 @@ public final class MuzzleEffectsRenderer {
 			pose.popPose();
 		}
 	}
-	private static void renderCases(MultiBufferSource buffers,PoseStack pose,int light,int overlay,float partial) {
-		var camera=Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+	private static void renderCases(MultiBufferSource buffers,PoseStack pose,int overlay,float partial) {
+		var mc=Minecraft.getInstance();
+		var camera=mc.gameRenderer.getMainCamera().getPosition();
 		for(var entry:CASES) {
 			var casing=entry.effect;var type=casing.type;
 			var texture=Textures.of(type.bulletTexture,false);
 			var rig=ModelCache.rigForReference(type.bulletModel,1F,texture);
 			if(texture==null || rig==null || rig.quads.isEmpty())continue;
+			// Lit by the light where the case lies, not by the player's hand. A case on the ground
+			// at night is dark, and one under a lamp is bright, which is what makes it read as an
+			// object in the world rather than an overlay.
+			int caseLight=mc.level==null?LightTexture.FULL_BRIGHT
+					:net.minecraft.client.renderer.LevelRenderer.getLightColor(mc.level,
+							net.minecraft.core.BlockPos.containing(entry.origin));
 			pose.pushPose();pose.translate(entry.origin.x-camera.x,entry.origin.y-camera.y,entry.origin.z-camera.z);pose.mulPose(casing.pose(partial));
-			RigRenderer.render(pose,buffers.getBuffer(RenderType.entityCutoutNoCull(texture)),rig,light,overlay,1F,1F,1F,1F,false);
+			RigRenderer.render(pose,buffers.getBuffer(RenderType.entityCutoutNoCull(texture)),rig,caseLight,overlay,1F,1F,1F,1F,false);
 			pose.popPose();
 		}
 	}

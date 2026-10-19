@@ -21,6 +21,44 @@ public final class GunStats {
 		for(var group:g.defaultAttachments) for(var node:group) v=attachment(v,node);
 		return v;
 	}
+	public static Values effective(GunType g,ItemStack stack) {return effective(GunAttachments.view(g,stack));}
+
+	/**
+	 * Product of every mounted part's {@code AimTimeMult}.
+	 *
+	 * <p>1.7.10 multiplied these into the gun's {@code AimTime} state. The aimed sight's own
+	 * {@code onUseAimTimeMult} is applied by the caller, which is the side that knows which sight
+	 * is being looked through.
+	 */
+	public static float aimTimeMultiplier(GunType g,ItemStack stack) {
+		return product(GunAttachments.view(g,stack).defaultAttachments,true);
+	}
+
+	/** Product of {@code MoveSpeedMultiplier} across the mounted tree; 1 when nothing declares one. */
+	public static float moveSpeedMultiplier(GunType g,ItemStack stack) {
+		return product(GunAttachments.view(g,stack).defaultAttachments,false);
+	}
+
+	/** One attachment multiplier's product across the whole mounted tree. */
+	private static float product(java.util.List<java.util.List<ModifiableType.DefaultAttachment>> tree,boolean aimTime) {
+		float value=1F;
+		for(var group:tree) for(var node:group) {
+			AttachmentType a=AttachmentType.getAttachment(node.name);
+			if(a!=null) value*=aimTime?a.aimTimeMult:a.moveSpeedMultiplier;
+			value*=productNode(node.children,aimTime);
+		}
+		return value;
+	}
+
+	private static float productNode(java.util.List<ModifiableType.DefaultAttachment> nodes,boolean aimTime) {
+		float value=1F;
+		for(var node:nodes) {
+			AttachmentType a=AttachmentType.getAttachment(node.name);
+			if(a!=null) value*=aimTime?a.aimTimeMult:a.moveSpeedMultiplier;
+			value*=productNode(node.children,aimTime);
+		}
+		return value;
+	}
 	private static Values attachment(Values v,ModifiableType.DefaultAttachment node) {
 		AttachmentType a=AttachmentType.getAttachment(node.name);
 		if(a!=null) v=new Values(v.damage*a.damageMultiplier,v.speed*a.bulletSpeedMultiplier,
@@ -41,7 +79,7 @@ public final class GunStats {
 	public record Shot(GunType gun,Values stats,float pitch,float yaw,boolean crouching) { }
 	/** Samples before spending the round, so the shot keeps the seated magazine's modifiers. */
 	public static Shot shot(GunType g,ItemStack stack,boolean crouching,float randomPitch,float randomYaw) {
-		Values v=effective(g);
+		Values v=effective(g,stack);
 		float p=v.pitch+(randomPitch-.5F)*v.randomPitch,y=v.yaw+(randomYaw-.5F)*v.randomYaw;
 		if(crouching) { p*=.8F; y*=.8F; }
 		GunType mag=GunMagazine.magazineType(stack,g);

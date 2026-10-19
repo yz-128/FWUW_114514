@@ -27,8 +27,11 @@ public final class GunReloading {
 	public static boolean start(Player player,PlayerData data,ItemStack stack,GunType gun,int compressionLimit,Action action) {
 		if(player.level().isClientSide || data.gunReload.active()) return false;
 		GunActions.ensureHeld(player,data);
+		if(data.sightFolding(player))return false;
 		Inventory inventory=player.getInventory();
 		boolean special=action==Action.SPECIAL,manual=action==Action.CHARGE || action==Action.RELEASE_BOLT;
+		if(player.containerMenu instanceof com.flansmod.common.inventory.GunModificationMenu) return false;
+		if(manual && !GunAttachments.requirements(gun,stack,2)) return false;
 		boolean installed=GunMagazine.magazineType(stack,gun)!=null;
 		ItemStack found=manual || (special && installed)?ItemStack.EMPTY
 				:special?GunMagazine.firstMagazine(inventory,gun):GunMagazine.findAmmo(inventory,gun);

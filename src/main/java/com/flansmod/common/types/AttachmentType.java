@@ -56,6 +56,16 @@ public class AttachmentType extends ModifiableType
 	public String shadowType = "generic";
 	public boolean shadowUpdatesGunStates = false;
 	public boolean hideInCreativeTab = false;
+	/** Fourth ShadowType argument: generic, toggle or cosight. */
+	public String shadowMode = "none";
+	public boolean isCoSight() { return "cosight".equals(shadowMode); }
+	public boolean isToggle() { return "toggle".equals(shadowMode); }
+	/** EFT marks the hidden half of a reciprocal folding pair as its folded variant. */
+	public boolean isFoldedVariant() {
+		if(!hideInCreativeTab || (!isCoSight() && !isToggle())) return false;
+		var other = getAttachment(shadowType);
+		return other != null && !other.hideInCreativeTab && other.shadowType.equalsIgnoreCase(shortName);
+	}
 
 	/** Secondary-fire behaviour: this part can fire, and with what. */
 	public boolean secondaryFire = false;
@@ -82,7 +92,12 @@ public class AttachmentType extends ModifiableType
 	public String leftHandPose, rightHandPose;
 	public int leftHandPriority = -128, rightHandPriority = -128;
 
-	/** How much of the gun's space the part occupies, per slot; FMUM's SpaceTaken line. */
+	/**
+	 * How much of the gun's space the part occupies, per slot.
+	 *
+	 * <p>Only ever authored by the content packs — neither the 1.7.10 core nor FMU 2.0 reads this
+	 * key at all, so it has no runtime meaning. Kept so the line parses without error.
+	 */
 	public final List<Integer> spaceTaken = new ArrayList<>();
 
 	// ---------------------------------------------------------------- FMUM effects
@@ -97,6 +112,11 @@ public class AttachmentType extends ModifiableType
 	/** Aiming and handling multipliers. */
 	public float aimTimeMult = 1F, sightSwitchMult = 1F, takeOutTimeMult = 1F,
 			runPoseTimeMult = 1F, moveSpeedMultiplier = 1F;
+	/**
+	 * The same three, applied only by the sight the gun is actually aiming through. 1.7.10 wrote
+	 * them as a second number on the same line: {@code AimTimeMult <all> <in-use>}.
+	 */
+	public float onUseAimTimeMult = 1F, onUseSightSwitchMult = 1F, aimingMoveSpeedMultiplier = 1F;
 
 	/** How far the part sits along the gun's length, in blocks. */
 	public float physicalLength = 0F;
@@ -111,10 +131,73 @@ public class AttachmentType extends ModifiableType
 	/** Duration of the flash this part adds, when it has one. */
 	public float muzzleFlashTime = 0F;
 
+	/**
+	 * The pack's {@code ZoomLevel} weight is ten times the optic's nominal magnification: PSO1
+	 * writes {@code 40 0.6} and is a 4x scope, NF7x writes {@code 70 0.3} and is 7x, and Octagon's
+	 * variable scope writes {@code 87.75 ... 39} for 8.8x down to 3.9x. Dividing by this gives the
+	 * magnification the author named the part after.
+	 *
+	 * <p>1.7.10 instead divided by {@code raw * pupilDistance} because it re-rendered the world from
+	 * the ocular; that is the same order of magnitude for a direct-mount PSO1 but degenerates for
+	 * parts whose pupil reference sits far from the camera (NF7x fell below 1x and was clamped, and
+	 * a 48.75/0.63 red dot became 30x). The named magnification is the stable, asset-derived value.
+	 */
+	public static final float ZOOM_LEVEL_SCALE = 0.1F;
+
+	/**
+	 * Legacy fixed reticle approximation. Live rendering reconstructs the dynamic pupil point
+	 * instead of using this value; retained only for compatibility with old offline tools.
+	 */
+	@Deprecated
+	public static final float RETICLE_PUPIL_DISTANCE = 0.4F;
+
+	/** Scope glass and black-mask models, by reference; null when the part has neither. */
+	public String scopeGlassModel, blackMaskModel;
+	/** One entry per magnification step; empty when this part does not magnify. */
+	public float[] fovZoomLevels = new float[0];
+	/** Mouse sensitivity multiplier that applies at the same step index. */
+	public float[] mouseSensitivityMult = new float[0];
+	/** Legacy definition default only. Runtime code must pass the mounted node's zoomStep. */
+	@Deprecated
+	public int zoomStep = 0;
+
+	/** Kept for the scalar {@code FOVZoomLevel} spelling some packs use. */
 	public float zoomLevel = 1F;
+	/** Scalar frame-FOV divisor, when the pack wrote {@code FOVZoomLevel} instead of {@code ZoomLevel}. */
 	public float FOVZoomLevel = 1F;
 	public String zoomOverlay;
 	public boolean hasScopeOverlay = false;
+
+	/**
+	 * Optical magnification for the selected step; 1 means no magnification. This is the value the
+	 * world camera is divided by, so it is also the perceptible zoom through the ocular.
+	 */
+	public float zoomDivisor()
+	{
+		return zoomDivisor(zoomStep);
+	}
+	public float zoomDivisor(int selectedStep)
+	{
+		if(fovZoomLevels.length == 0)
+			return FOVZoomLevel > 1F ? Math.min(FOVZoomLevel, 20F) : 1F;
+		int step = Math.max(0, Math.min(selectedStep, fovZoomLevels.length - 1));
+		float divisor = fovZoomLevels[step] * ZOOM_LEVEL_SCALE;
+		return divisor > 1F ? Math.min(divisor, 20F) : 1F;
+	}
+
+	/** Sensitivity multiplier for the selected step; 1 when the pack declared none. */
+	public float sensitivityMultiplier()
+	{
+		return sensitivityMultiplier(zoomStep);
+	}
+	public float sensitivityMultiplier(int selectedStep)
+	{
+		if(mouseSensitivityMult.length == 0)
+			return 1F;
+		int step = Math.max(0, Math.min(selectedStep, mouseSensitivityMult.length - 1));
+		float value = mouseSensitivityMult[step];
+		return value > 0F ? value : 1F;
+	}
 
 	public int maxStackSize = 1;
 
@@ -155,8 +238,51 @@ public class AttachmentType extends ModifiableType
 				case "MeleeDamageMultiplier" -> meleeDamageMultiplier = toFloat(split[1]);
 				case "BulletSpeedMultiplier" -> bulletSpeedMultiplier = toFloat(split[1]);
 				case "ReloadTimeMultiplier" -> reloadTimeMultiplier = toFloat(split[1]);
+				// 1.7.10 writes a second number on these three lines for the "in use" value —
+				// the multiplier that applies only through the sight actually being aimed.
+				case "MoveSpeedMultiplier" -> {
+					moveSpeedMultiplier = toFloat(split[1]);
+					if(split.length > 2) aimingMoveSpeedMultiplier = toFloat(split[2]);
+				}
+				case "AimTimeMult", "AimTimeMultiplier" -> {
+					aimTimeMult = toFloat(split[1]);
+					if(split.length > 2) onUseAimTimeMult = toFloat(split[2]);
+				}
+				case "SightSwitchMult" -> {
+					sightSwitchMult = toFloat(split[1]);
+					if(split.length > 2) onUseSightSwitchMult = toFloat(split[2]);
+				}
 				case "ModeOverride" -> modeOverride = GunType.EnumFireMode.getFireMode(split[1]);
-				case "ZoomLevel" -> zoomLevel = toFloat(split[1]);
+				// 1.7.10: ZoomLevel <glass model> <mask model> <level> <sensitivity> [<level> <sensitivity> ...]
+				// The first two tokens are models, not numbers — reading them as a float silently
+				// produced 0 and threw away the whole magnification list.
+				case "ZoomLevel" -> {
+					if(split.length == 2) {
+						try {
+							float scalar = Float.parseFloat(split[1]);
+							if(Float.isFinite(scalar) && scalar > 0F) zoomLevel = FOVZoomLevel = scalar;
+						} catch(NumberFormatException modelOnly) {
+							if(!split[1].equalsIgnoreCase("None")) scopeGlassModel = split[1];
+						}
+						break;
+					}
+					if(!split[1].equalsIgnoreCase("None"))
+						scopeGlassModel = split[1];
+					if(split.length > 2 && !split[2].equalsIgnoreCase("None"))
+						blackMaskModel = split[2];
+					int steps = (split.length - 3) / 2;
+					if(steps > 0)
+					{
+						fovZoomLevels = new float[steps];
+						mouseSensitivityMult = new float[steps];
+						for(int i = 0; i < steps; i++)
+						{
+							fovZoomLevels[i] = toFloat(split[i * 2 + 3]);
+							mouseSensitivityMult[i] = i * 2 + 4 < split.length ? toFloat(split[i * 2 + 4]) : 1F;
+						}
+						hasScopeOverlay = true;
+					}
+				}
 				case "FOVZoomLevel" -> FOVZoomLevel = toFloat(split[1]);
 				// The packs call this "Scope" on attachments, matching the gun field.
 				case "Scope" -> {
@@ -175,20 +301,11 @@ public class AttachmentType extends ModifiableType
 				}
 
 				case "ShadowType" -> {
-					// ShadowType <name> [updateGunStates] [hideInCreative] — trailing tokens are
-					// optional and are the booleans FMUM reads from the end of the line.
-					shadowType = split[1].toLowerCase(java.util.Locale.ROOT);
-					for(int i = split.length; --i > 1; )
-					{
-						if(i >= split.length - 2)
-						{
-							boolean value = toBool(split[i]);
-							if(i == split.length - 2)
-								shadowUpdatesGunStates = value;
-							else
-								hideInCreativeTab = value;
-						}
-					}
+					// FMUM: ShadowType <name> [hideCreative] [updateGunStates] [mode].
+					shadowType = split[1]; shadowMode = "generic";
+					if(split.length > 2) hideInCreativeTab = toBool(split[2]);
+					if(split.length > 3) shadowUpdatesGunStates = toBool(split[3]);
+					if(split.length > 4) shadowMode = split[4].toLowerCase(java.util.Locale.ROOT);
 				}
 				case "HideInCreativeTab" -> hideInCreativeTab = toBool(split[1]);
 
@@ -288,9 +405,6 @@ public class AttachmentType extends ModifiableType
 				case "EnableShootSoundNum" -> enableShootSoundIndex = toInt(split[1]);
 				case "SoundRangeMultiplier" -> soundRangeMultiplier = toFloat(split[1]);
 
-				case "MoveSpeedMultiplier" -> moveSpeedMultiplier = toFloat(split[1]);
-				case "AimTimeMult", "AimTimeMultiplier" -> aimTimeMult = toFloat(split[1]);
-				case "SightSwitchMult" -> sightSwitchMult = toFloat(split[1]);
 				case "TakeOutTimeMult" -> takeOutTimeMult = toFloat(split[1]);
 				case "RunPoseTimeMult" -> runPoseTimeMult = toFloat(split[1]);
 
@@ -349,6 +463,7 @@ public class AttachmentType extends ModifiableType
 	@Override
 	protected void postRead(TypeFile file) {
 		super.postRead(file);
+		for(int i=0;i<attachOffsets.length;i++) attachOffsets[i]*=modelScale<=0F?1F:modelScale;
 		muzzleSmoke.at*=modelScale;
 	}
 	/** The coated-glass overlay model a sight draws its lens with. */

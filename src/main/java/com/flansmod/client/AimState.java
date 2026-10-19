@@ -16,17 +16,43 @@ public final class AimState
 
 	private static float progress, lastProgress;
 
+	/**
+	 * Per-tick retention of the raise, as 1.7.10's {@code AimTime} actually behaves.
+	 *
+	 * <p>It is not a duration: the old code advanced the raise with
+	 * {@code p = 1 - (1 - p) * AimTime}, and every attachment's {@code AimTimeMult} multiplied
+	 * that constant. A smaller value therefore closes faster, which is why the packs author
+	 * things like {@code AimTime 0.62} for a pistol and larger values for a heavy optic. The
+	 * 0.66 default is 1.7.10's.
+	 */
+	private static final float DEFAULT_RETENTION = 0.66F;
+	private static float retention = DEFAULT_RETENTION;
+
 	/** True once the raise has gone far enough that the resting pose should yield to ADS. */
 	public static boolean isAiming()
 	{
 		return progress > 0.5F;
 	}
 
+	/** Sets the retention factor; values outside (0,1) restore the default. */
+	public static void setRetention(float factor)
+	{
+		retention = factor > 0F && factor < 1F ? factor : DEFAULT_RETENTION;
+	}
+
+	public static float retention()
+	{
+		return retention;
+	}
+
 	/** Advances the raise one tick. */
 	public static void tick(boolean aiming)
 	{
 		lastProgress = progress;
-		progress = Mth.clamp(progress + (aiming ? 0.2F : -0.2F), 0F, 1F);
+		progress = aiming
+				? 1F - (1F - progress) * retention
+				: progress * retention;
+		progress = Mth.clamp(progress, 0F, 1F);
 	}
 
 	/** Frame-interpolated progress, for the renderer. */

@@ -177,7 +177,7 @@ public class FPPreview {
             var type=BulletType.getBullet(System.getProperty("fp.caseType","556x45mmCasing"));
             if(type==null)throw new IllegalArgumentException("Unknown ejected bullet/case");
             var casing=new com.flansmod.client.model.FmumCasing(type,model,chain,Boolean.getBoolean("fp.manualEject"),Long.getLong("fp.caseSeed",7L),sight.roll());
-            for(int i=0;i<caseTick;i++)casing.tick();
+            for(int i=0;i<caseTick;i++)casing.tick(null,0,0,0);
             var origin=com.flansmod.client.model.FmumCasing.origin(model,new Matrix4f(chain));
             var rig=ModelCache.rigForReference(type.bulletModel,1F);
             if(rig!=null && casing.alive())parts.add(new Part(new Matrix4f().translate(origin).mul(casing.pose(1F)),rig,skin(root,type.bulletTexture),0xFFFFFFFF));

@@ -37,7 +37,7 @@ public final class ModelCache
 		Thread thread = new Thread(task, "flansmod-model-reader"); thread.setDaemon(true); return thread;
 	});
 	private record RigKey(String reference, float scale, net.minecraft.resources.ResourceLocation texture,
-			boolean skinFallback, boolean clientUv) { }
+			boolean skinFallback, boolean clientUv, boolean armour) { }
 	private static final class State {
 		final PackIndex index;
 		final Set<String> missing = ConcurrentHashMap.newKeySet();
@@ -136,9 +136,14 @@ public final class ModelCache
 
     private static BakedRig rig(String reference, float scale,
             net.minecraft.resources.ResourceLocation texture, boolean skinFallback) {
+        return rig(reference, scale, texture, skinFallback, false);
+    }
+
+    private static BakedRig rig(String reference, float scale,
+            net.minecraft.resources.ResourceLocation texture, boolean skinFallback, boolean armour) {
         if(!usable(reference)) return null;
         var current = currentState();
-        var key = new RigKey(reference, scale, texture, skinFallback, isClientEnvironment());
+        var key = new RigKey(reference, scale, texture, skinFallback, isClientEnvironment(), armour);
         var cached = current.rigs.get(key);
         if(cached != null) return cached;
         if(liveClient()) {
@@ -161,7 +166,8 @@ public final class ModelCache
 
     private static BakedRig bake(State current, RigKey key, ModelGeometry.Model geometry) {
         float[] uv = key.skinFallback() ? uvScaleFor(geometry, key.texture()) : textureUv(geometry,key.texture());
-        var rig = BakedRig.bake(geometry, key.scale(), uv[0], uv[1]);
+        var rig = key.armour() ? ArmourGeometry.bake(geometry, key.scale(), uv[0], uv[1])
+                : BakedRig.bake(geometry, key.scale(), uv[0], uv[1]);
         // Workers and derived caches are bound to one state; reload never imports their results.
         if(current == state) current.rigs.putIfAbsent(key, rig);
         return rig;
@@ -196,7 +202,7 @@ public final class ModelCache
     public static void prewarmReference(String reference, float scale,
             net.minecraft.resources.ResourceLocation texture, boolean skinFallback) {
         if(!usable(reference)) return;
-        schedule(currentState(), new RigKey(reference,scale,texture,skinFallback,isClientEnvironment()));
+        schedule(currentState(), new RigKey(reference,scale,texture,skinFallback,isClientEnvironment(),false));
     }
     public static void prewarm(InfoType type) {
         if(type != null) prewarmReference(type.modelString,type.modelScale,
@@ -205,7 +211,18 @@ public final class ModelCache
 
     public static void prewarmEffectReference(String reference, float scale,
             net.minecraft.resources.ResourceLocation texture) {
-        if(usable(reference)) schedule(currentState(),new RigKey(reference,scale,texture,true,isClientEnvironment()),false);
+        if(usable(reference)) schedule(currentState(),new RigKey(reference,scale,texture,true,isClientEnvironment(),false),false);
+    }
+
+    public static BakedRig rigForArmour(com.flansmod.common.types.ArmourType type,
+            net.minecraft.resources.ResourceLocation texture) {
+        return rig(type.modelString, type.modelScale, texture, false, true);
+    }
+
+    public static void prewarmArmour(com.flansmod.common.types.ArmourType type,
+            net.minecraft.resources.ResourceLocation texture) {
+        if(usable(type.modelString)) schedule(currentState(),new RigKey(type.modelString,type.modelScale,
+                texture,false,isClientEnvironment(),true));
     }
 
     public static LazyAssetCache.Stats geometryStats() { return currentState().geometry.stats(); }

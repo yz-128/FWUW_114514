@@ -33,7 +33,7 @@ public final class GunDetails {
 		}
 		if(gun.shootDelay<=0F) return; // EFT's melee item is also in guns/.
 		if(!expanded) { lines.add(Component.translatable("stats.flansmod.shift").withStyle(ChatFormatting.YELLOW));return; }
-		var base=GunStats.base(gun);var stats=GunStats.effective(gun);
+		var base=GunStats.base(gun);var stats=GunStats.effective(gun,stack);
 		lines.add(Component.translatable("stats.flansmod.heading").withStyle(ChatFormatting.GOLD));
 		line(lines,"damage",number(stats.damage()));
 		line(lines,"rpm",number(stats.rpm()));
@@ -52,7 +52,8 @@ public final class GunDetails {
 	public static String number(float value) { return java.math.BigDecimal.valueOf(value).setScale(3,java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString(); }
 	@SubscribeEvent public static void fov(ViewportEvent.ComputeFov event) {
 		var mc=Minecraft.getInstance();if(mc.player==null || !mc.options.getCameraType().isFirstPerson()) return;
-		if(!(InfoType.getType(mc.player.getMainHandItem()) instanceof GunType gun))return;
+		net.minecraft.world.item.ItemStack held=mc.player.getMainHandItem();
+		if(!(InfoType.getType(held) instanceof GunType gun))return;
 		float kick=gun.itsType==GunType.GunItsType.MAG?0F:GunAnimationRegistry.right(mc.player).fmumRecoil.fov((float)event.getPartialTick());
 		double base=event.getFOV();
 		if(!event.usedConfiguredFov()) {
@@ -63,6 +64,35 @@ public final class GunDetails {
 			base=mc.options.fov().get();
 			if(event.getCamera().getFluidInCamera()==net.minecraft.world.level.material.FogType.WATER)base*=60D/70D;
 		}
-		event.setFOV(base*(1F+kick));
+		double zoom=1;
+		if(event.usedConfiguredFov() && !PlayerHandler.getPlayerData(mc.player).sightFolding(mc.player)) {
+			var view=GunAttachments.view(gun,held);
+			var scope=GunSightState.scopeSight(view);
+			// Magnify the world pass itself, the way TACZ does, instead of sampling a crop of the
+			// finished frame. The frame buffer holds every pixel the camera can see; cropping a
+			// fifth of it and stretching it over the ocular is what made the image soft.
+			if(scope!=null)
+				zoom=com.flansmod.client.render.ScopeMagnification.zoom(scope.type(),scope.node().zoomStep);
+			else {
+				var sight=GunSightState.selectedSight(view);
+				if(sight!=null && !sight.type().isFoldedVariant())zoom=Math.max(1,sight.type().FOVZoomLevel);
+			}
+			// The hand pass keeps its own FOV, so the gun model does not grow with the world.
+			zoom=1+(zoom-1)*AimState.blend((float)event.getPartialTick());
+		}
+		if(event.usedConfiguredFov())com.flansmod.client.render.ScopeMagnification.frame(base*(1F+kick),zoom);
+		event.setFOV(base*(1F+kick)/zoom);
+	}
+	@SubscribeEvent public static void sensitivity(net.neoforged.neoforge.client.event.CalculatePlayerTurnEvent event) {
+		var mc=Minecraft.getInstance();
+		if(mc.player==null || mc.screen!=null || !mc.options.getCameraType().isFirstPerson())return;
+		if(PlayerHandler.getPlayerData(mc.player).sightFolding(mc.player))return;
+		var stack=mc.player.getMainHandItem();if(!(InfoType.getType(stack) instanceof GunType gun))return;
+		var group=GunSightState.selectedGroup(GunAttachments.view(gun,stack));if(group==null)return;
+		double multiplier=1;
+		for(var sight:group.sights())if(!sight.type().isFoldedVariant())
+			multiplier*=sight.type().sensitivityMultiplier(sight.node().zoomStep);
+		float aim=AimState.blend(mc.getTimer().getGameTimeDeltaPartialTick(true));
+		event.setMouseSensitivity(com.flansmod.client.render.FmumSightPicture.sensitivity(event.getMouseSensitivity(),1+(multiplier-1)*aim));
 	}
 }

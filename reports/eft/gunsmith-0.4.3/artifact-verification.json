@@ -1,0 +1,14 @@
+{
+  "artifact": "E:\\JAVAMCMODGJ\\FLAN 移植i\\flanmod-template-1.21.1\\build\\libs\\flansmod-0.4.3.jar",
+  "bytes": 556144,
+  "sha256": "385E55D2D333A53F7617634A363953CD49AC629FE2F9512596ECE55605FCC0EB",
+  "classes": 206,
+  "maxClassMajor": 65,
+  "version": "0.4.3",
+  "build": "PASS; JUnit NO-SOURCE",
+  "java21PreviewAssertions": 17842,
+  "java21CatalogChecks": 4382,
+  "java21ModificationAssertions": 64,
+  "gameLaunched": false,
+  "deepseekReceipt": false
+}

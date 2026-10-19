@@ -89,8 +89,13 @@ public final class GunAnimationDriver
 
 		// Both are smoothed here rather than in the renderer, so they advance once per tick like
 		// every other animation value. Aiming is the vanilla use button, which is the modern
-		// convention the packs' ADS data was made for.
-		AimState.tick(com.flansmod.common.GunActions.firearm(held)!=null && !data.gunAction.manualRest
+		// convention the packs' ADS data was made for. The rate is the gun's AimTime times every
+		// mounted part's AimTimeMult and the aimed sight's own in-use value, so a heavy optic
+		// comes up slower than iron sights.
+		com.flansmod.common.types.GunType firearmType = com.flansmod.common.GunActions.firearm(held);
+		if(firearmType != null)
+			AimState.setRetention(aimRetention(firearmType, held));
+		AimState.tick(firearmType != null && !data.sightFolding(player) && !data.gunAction.manualRest
 				&& data.gunAction.takeOut==0F
 				&& aiming);
 
@@ -146,5 +151,24 @@ public final class GunAnimationDriver
 	{
 		CAMERA.reset();lastTriggerDown=false;
 		lastReloadingRight = false;
+	}
+
+	/**
+	 * The per-tick retention the aim raise uses.
+	 *
+	 * <p>1.7.10's {@code AimTime} is a retention constant, not a duration: it advanced the raise
+	 * with {@code p = 1 - (1 - p) * AimTime} and multiplied every mounted part's
+	 * {@code AimTimeMult} into that constant, then the aimed sight's {@code onUseAimTimeMult}.
+	 */
+	private static float aimRetention(GunType gun, ItemStack stack)
+	{
+		GunType view = com.flansmod.common.GunAttachments.view(gun, stack);
+		float retention = view.aimTimeConst > 0F && view.aimTimeConst < 1F ? view.aimTimeConst : 0.66F;
+		retention *= com.flansmod.common.GunStats.aimTimeMultiplier(gun, stack);
+		var group = com.flansmod.common.GunSightState.selectedGroup(view);
+		if(group != null)for(var sight:group.sights())
+			if(!sight.type().isFoldedVariant() && sight.type().onUseAimTimeMult > 0F)
+				retention *= sight.type().onUseAimTimeMult;
+		return retention > 0F && retention < 1F ? retention : 0.66F;
 	}
 }

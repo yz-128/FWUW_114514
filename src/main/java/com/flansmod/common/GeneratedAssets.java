@@ -209,6 +209,23 @@ public class GeneratedAssets extends AbstractPackResources
 			String path = e.getKey();
 			InfoType type = byPath.get(path);
 
+            // Modern ArmorMaterial layers address this conventional path. The source stays in
+            // the original pack; only a runtime resource alias is generated alongside icons.
+            if(type instanceof com.flansmod.common.types.ArmourType armour) {
+                var texture = com.flansmod.client.render.Textures.forArmour(armour, location ->
+                        ContentPackIndex.current().find("assets/" + location.getNamespace() + "/" + location.getPath(), true).isPresent());
+                if(texture != null) {
+                    var source = ContentPackIndex.current().find("assets/" + texture.getNamespace() + "/" + texture.getPath(), true);
+                    if(source.isPresent()) try {
+                        byte[] pixels = source.get().readAllBytes();
+                        for(int layer = 1; layer <= 2; layer++)
+                            out.put("textures/models/armor/legacy/" + path + "_layer_" + layer + ".png", pixels);
+                    } catch(IOException failure) {
+                        FlansMod.LOGGER.warn("Cannot read armour texture for " + path, failure);
+                    }
+                }
+            }
+
 			// The icon, copied to a lower-case name in the one folder the vanilla item atlas
 			// reads ("item/", singular) because the packs keep it at "items/" with mixed case.
 			byte[] iconBytes = findIcon(e.getValue());

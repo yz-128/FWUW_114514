@@ -49,6 +49,10 @@ public class PlayerData
 	/** Reload animation is playing. Cleared when {@link #shootTimeRight} reaches zero. */
 	public boolean reloadingRight, reloadingLeft;
 	public final GunActionState gunAction = new GunActionState();
+	/** Transient server-confirmed gesture, cleared on weapon/slot changes rather than saved on an item. */
+	public int sightFoldUntilTick;
+	public long sightFoldSequence;
+	public boolean sightFolding(Player player) {return player.tickCount<sightFoldUntilTick;}
 	public final GunReloadState gunReload = new GunReloadState();
 	public com.flansmod.common.types.GunType reloadGun;
 	public ItemStack reloadGunStack=ItemStack.EMPTY, reloadIncomingMagazine=ItemStack.EMPTY, reloadOutgoingMagazine=ItemStack.EMPTY;
@@ -62,6 +66,7 @@ public class PlayerData
 	public com.flansmod.common.network.ReloadPayload.Action pendingReloadAction=com.flansmod.common.network.ReloadPayload.Action.NORMAL;
 	public com.flansmod.common.types.GunType actionGun;
 	public int actionSlot = -1, actionTick = Integer.MIN_VALUE;
+	public int actionAttachmentRevision = -1;
 	public net.minecraft.world.level.Level actionLevel;
 	public float effectiveTakeOut;
 	public boolean pendingGunReload, pendingGunTrigger;

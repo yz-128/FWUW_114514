@@ -32,10 +32,14 @@ public final class OfflinePack {
                     tf.contentPack=root.getFileName().toString();
                     tf.lines.addAll(TextDecoding.readLines(file));
                     InfoType type=kind.getTypeClass().getConstructor(TypeFile.class).newInstance(tf);
+                    type.contentPack=tf.contentPack;
                     type.read(tf);
                     types.add(type);
                 }
             }
         }
+        // Mirror the live loader's second pass after forward-referenced attachments exist.
+        for(var type:InfoType.infoTypes) if(type instanceof ModifiableType modifiable)
+            modifiable.resolveDefaultAttachments();
     }
 }

@@ -34,8 +34,14 @@ public final class Textures
 	private record Key(String name, boolean fallback) { }
 	private static volatile java.util.Map<Key, java.util.Optional<ResourceLocation>> resolved =
 			new java.util.concurrent.ConcurrentHashMap<>();
+	private record ArmourKey(String name, int slot) { }
+	private static volatile java.util.Map<ArmourKey, java.util.Optional<ResourceLocation>> armourResolved =
+			new java.util.concurrent.ConcurrentHashMap<>();
 	/** A fresh map prevents in-flight lookups from publishing into the new resource generation. */
-	public static void clear() { resolved = new java.util.concurrent.ConcurrentHashMap<>(); }
+	public static void clear() {
+		resolved = new java.util.concurrent.ConcurrentHashMap<>();
+		armourResolved = new java.util.concurrent.ConcurrentHashMap<>();
+	}
 
 	/** The stock round's skin, used when a bullet definition names none. */
 	public static final String DEFAULT_BULLET = "defaultBullet";
@@ -46,6 +52,36 @@ public final class Textures
 	{
 		return of(type == null ? null : type.texture, false);
 	}
+
+    /** Legacy armour uses armor/<name>_1.png or _2.png, independently of held-item skins. */
+    public static ResourceLocation forArmour(com.flansmod.common.types.ArmourType type) {
+        String name = type.armourTextureName == null ? type.texture : type.armourTextureName;
+        return armourResolved.computeIfAbsent(new ArmourKey(name, type.type),
+                ignored -> java.util.Optional.ofNullable(forArmour(type, Textures::has))).orElse(null);
+    }
+
+    public static ResourceLocation forArmour(com.flansmod.common.types.ArmourType type,
+            java.util.function.Predicate<ResourceLocation> exists) {
+        String texture = type.armourTextureName;
+        if(texture == null || texture.isBlank()) texture = type.texture;
+        if(texture == null || texture.isBlank()) return null;
+        texture = texture.toLowerCase(java.util.Locale.ROOT);
+        if(texture.contains(":")) return ResourceLocation.tryParse(texture);
+        String stem = texture.replaceFirst("\\.png$", "");
+        int layer = type.type == 2 ? 2 : 1;
+        for(String folder : new String[] {"armor/", "textures/armor/", "textures/models/armor/"}) {
+            var location = ResourceLocation.fromNamespaceAndPath(FlansMod.MODID, folder + stem + "_" + layer + ".png");
+            if(exists.test(location)) return location;
+        }
+        // Both EFT armour editions ship this skin with an accidental duplicated name prefix.
+        // Prefer a correctly named replacement/resource pack above, then recognize that exact typo.
+        if(stem.equals("maska1sch_killa")) {
+            var typo = ResourceLocation.fromNamespaceAndPath(FlansMod.MODID,
+                    "armor/maska1schamaska1sch_killa_" + layer + ".png");
+            if(exists.test(typo)) return typo;
+        }
+        return of(texture, false, exists);
+    }
 
 	/** Same lookup for offline pack inspection, with a filesystem-backed resource probe. */
 	@Nullable

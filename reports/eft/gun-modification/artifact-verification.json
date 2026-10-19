@@ -1,0 +1,12 @@
+{
+  "artifact": "E:\\JAVAMCMODGJ\\FLAN 移植i\\flanmod-template-1.21.1\\build\\libs\\flansmod-0.4.2.jar",
+  "bytes": 545784,
+  "sha256": "CA4834F4A59FCDB18B4F5007129D5002F75B69F8D3D62BD7F8D572F2678100CF",
+  "classCount": 201,
+  "maxClassMajor": 65,
+  "version": "0.4.2",
+  "java21Transactions": "PASS: 64 assertions",
+  "fullBuild": "PASS; Gradle JUnit NO-SOURCE",
+  "gameLaunched": false,
+  "deepseekReceipt": false
+}

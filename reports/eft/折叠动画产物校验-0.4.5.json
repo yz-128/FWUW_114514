@@ -1,0 +1,12 @@
+{
+  "artifact": "E:\\JAVAMCMODGJ\\FLAN 移植i\\flanmod-template-1.21.1\\build\\libs\\flansmod-0.4.5.jar",
+  "size": 634431,
+  "sha256": "22CA4A45B6A576FE19E7EA688A33AB68507338FF5DDABDA7952CE40E44343769",
+  "class_versions": {
+    "65": 230
+  },
+  "checked_at": "2026-10-19T12:57:04.4629258+08:00",
+  "test_logs": "build/verification-fold-0.4.5",
+  "game_started": false,
+  "preview": "CPU diagnostic frames, no game input"
+}

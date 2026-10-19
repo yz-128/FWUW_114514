@@ -8,14 +8,51 @@ import java.util.Random;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
-/** EFT GunCase: world gravity, per-tick spin, interpolation, and its finite model-defined lifetime. */
+/**
+ * One ejected case in the world.
+ *
+ * <p>1.7.10's {@code GunCase} was pure ballistics — gravity, drag and a spin, with no collision at
+ * all, so a case fell straight through the ground and vanished when its timer ran out. This adds
+ * what the original lacked: the case stops at terrain, bounces, loses its spin and comes to rest,
+ * and it stays on the ground considerably longer than the model's own {@code caseTime}.
+ */
 public final class FmumCasing {
+	/** Per-tick gravity, exactly as 1.7.10 wrote it. */
+	private static final float GRAVITY = -1.96F / 160F;
+	/** Speed kept each tick in flight. */
+	private static final float AIR_DRAG = 0.99F;
+	/** Speed kept each tick while resting on a surface. */
+	private static final float GROUND_FRICTION = 0.55F;
+	/** Spin kept each tick while resting. */
+	private static final float GROUND_SPIN_FRICTION = 0.6F;
+	/** Fraction of the impact speed returned by a bounce. */
+	private static final float BOUNCE = 0.32F;
+	/** Below this speed a grounded case is treated as stopped. */
+	private static final float SLEEP_SPEED = 0.004F;
+	/** Half-extent used when testing terrain against the case. */
+	private static final float RADIUS = 0.02F;
+	/**
+	 * How much longer than the model's {@code caseTime} a case stays in the world.
+	 *
+	 * <p>The packs all author 60 ticks (3 seconds), which is just long enough to watch the case
+	 * fly. Multiplying rather than replacing keeps a pack that asks for a shorter or longer case
+	 * proportionally longer too.
+	 */
+	public static final float LIFETIME_MULTIPLIER = 4F;
+
 	public final BulletType type;
 	public final Vector3f position=new Vector3f(),lastPosition=new Vector3f(),velocity,center,axis;
 	public final Matrix4f rotation;
 	public final int lifetime;
+	/** The launch speed, before drag; kept so the decay can be measured against it. */
+	public final float launchSpeed;
 	public float spin,lastSpin,spinVelocity;
 	public int age;
+	/** True while the case is touching terrain, which switches it to ground friction. */
+	public boolean grounded;
+	/** True once it has stopped completely; it then keeps its resting pose until it expires. */
+	private boolean settled;
+
 	public FmumCasing(BulletType type,Model model,Matrix4f gun,boolean manual,long seed,float roll) {
 		this.type=type;
 		var random=new Random(seed);
@@ -29,7 +66,8 @@ public final class FmumCasing {
 		center=direction.transformDirection(new Vector3f(type.bulletRotCenter).mul(type.bulletScale/16F));
 		rotation=FmumMuzzlePose.smokeOrigin(gun,roll).setTranslation(0,0,0);
 		spinVelocity=FmumActionPose.scalar(model,manual?"rotVelocityWC":"rotVelocity",manual?30F:55F);
-		lifetime=Math.max(1,(int)FmumActionPose.scalar(model,"caseTime",30F));
+		lifetime=Math.max(1,(int)(FmumActionPose.scalar(model,"caseTime",30F)*LIFETIME_MULTIPLIER));
+		launchSpeed=velocity.length();
 	}
 	private static Vector3f sample(Model model,String base,String spread,float[] fallback,float[] range,Random random) {
 		float[] a=model==null?fallback:model.fmumPose.getOrDefault(base,fallback);
@@ -39,13 +77,76 @@ public final class FmumCasing {
 	public static Vector3f origin(Model model,Matrix4f gun) {
 		return gun.transformPosition(new Vector3f(FmumActionPose.vector(model,"caseOrigin")));
 	}
-	public void tick() {
+
+	/**
+	 * Advances one tick.
+	 *
+	 * @param level  the client level, or null when there is no world to collide with
+	 * @param worldX world-space X of {@link #position}'s origin
+	 * @param worldY world-space Y of {@link #position}'s origin
+	 * @param worldZ world-space Z of {@link #position}'s origin
+	 */
+	public void tick(net.minecraft.world.level.Level level,double worldX,double worldY,double worldZ) {
 		if(!alive())return;
-		age++;lastPosition.set(position);
-		// The actual 1.1 jar uses these constants, even when ModelGun exposes friction/gravity fields.
-		velocity.y+=-1.96F/160F;velocity.mul(.99F);position.add(velocity);
-		spinVelocity*=.99F;lastSpin=spin;spin+=spinVelocity;
+		age++;lastPosition.set(position);lastSpin=spin;
+		if(settled)return;
+
+		velocity.y+=GRAVITY;velocity.mul(AIR_DRAG);
+
+		float dx=velocity.x,dy=velocity.y,dz=velocity.z;
+		boolean onGround=false;
+		if(level!=null) {
+			// A case ejected into a wall starts inside a block. Testing each axis then rejects
+			// every direction at once and welds it into the wall for its whole lifetime, so a
+			// case that is already embedded ignores collision and simply drifts back out.
+			boolean embedded=inside(level,worldX+position.x,worldY+position.y,worldZ+position.z);
+			if(!embedded) {
+				// One axis at a time, so a case sliding along a wall keeps the other component.
+				if(solid(level,worldX+position.x,worldY+position.y+dy,worldZ+position.z)) {
+					if(dy<0F)onGround=true;
+					dy=0F;velocity.y=-velocity.y*BOUNCE;
+					if(Math.abs(velocity.y)<SLEEP_SPEED)velocity.y=0F;
+				}
+				if(solid(level,worldX+position.x+dx,worldY+position.y+dy,worldZ+position.z)) {
+					dx=0F;velocity.x=-velocity.x*BOUNCE;
+				}
+				if(solid(level,worldX+position.x+dx,worldY+position.y+dy,worldZ+position.z+dz)) {
+					dz=0F;velocity.z=-velocity.z*BOUNCE;
+				}
+			}
+		}
+		position.add(dx,dy,dz);
+		grounded=onGround;
+
+		if(onGround) {
+			velocity.x*=GROUND_FRICTION;velocity.z*=GROUND_FRICTION;
+			spinVelocity*=GROUND_SPIN_FRICTION;
+			if(velocity.lengthSquared()<SLEEP_SPEED*SLEEP_SPEED&&Math.abs(spinVelocity)<0.5F) {
+				velocity.set(0F,0F,0F);spinVelocity=0F;settled=true;
+			}
+		} else spinVelocity*=AIR_DRAG;
+		spin+=spinVelocity;
 	}
+
+	/** True when the point is inside a block's collision shape, with a little slack for the case. */
+	private static boolean solid(net.minecraft.world.level.Level level,double x,double y,double z) {
+		var pos=net.minecraft.core.BlockPos.containing(x,y,z);
+		var state=level.getBlockState(pos);
+		if(state.isAir())return false;
+		var shape=state.getCollisionShape(level,pos);
+		if(shape.isEmpty())return false;
+		return shape.bounds().move(pos).inflate(RADIUS).contains(x,y,z);
+	}
+
+	/** True when the point is inside a solid block at all, without the extra radius. */
+	private static boolean inside(net.minecraft.world.level.Level level,double x,double y,double z) {
+		var pos=net.minecraft.core.BlockPos.containing(x,y,z);
+		var state=level.getBlockState(pos);
+		if(state.isAir())return false;
+		var shape=state.getCollisionShape(level,pos);
+		return !shape.isEmpty() && shape.bounds().move(pos).contains(x,y,z);
+	}
+
 	public boolean alive() {return age<lifetime;}
 	public Matrix4f pose(float partial) {
 		float p=Math.clamp(partial,0F,1F);

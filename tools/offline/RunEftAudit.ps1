@@ -2,21 +2,37 @@ param(
     [string]$OriginalPack = 'C:\Users\Administrator\AppData\Local\Temp\eftr\EscapeFromTarcraftReforged_1.5.3',
     [string]$GradleUserHome = 'C:\Users\Administrator\.gradle'
 )
-$ErrorActionPreference = 'Stop'
+# Native tools write progress and JVM warnings to stderr. PowerShell 5.1 turns redirected native
+# stderr into a terminating NativeCommandError under 'Stop', which would abort a passing run, so
+# every step below is gated on $LASTEXITCODE instead.
+$ErrorActionPreference = 'Continue'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 Push-Location -LiteralPath $projectRoot
 try {
     & ./gradlew.bat -g $GradleUserHome writeOfflineClasspath -q
     if ($LASTEXITCODE -ne 0) { throw 'Gradle failed.' }
-    $classpath = (Get-Content -Raw -LiteralPath 'build/offline-classpath.txt').Trim()
+    # Windows caps a native command line, and PowerShell 5.1 does not reliably quote an argument
+    # containing a space before a semicolon. Passing the classpath through a javac/java argfile
+    # avoids both. The project path contains a non-ASCII directory name and javac decodes argfiles
+    # with the platform charset, so the project's own entries are made relative — that leaves only
+    # ASCII jar paths, which every charset decodes identically.
+    $root = (Get-Location).Path
+    $classpath = [IO.File]::ReadAllText(
+            (Join-Path $root 'build/offline-classpath.txt'), [Text.Encoding]::UTF8).Trim()
+    $classpath = $classpath.Replace($root + '\', '').Replace($root, '.')
     New-Item -ItemType Directory -Path 'build/offline','reports/eft/materials' -Force | Out-Null
-    $sources = @('OfflinePack.java','FPPreview.java','TPPreview.java','MaterialAudit.java','VerifyLegacyRender.java','VerifyGunActions.java','VerifyMagazineData.java','VerifyReloadRendering.java','VerifyReloadInput.java','VerifyRecoilStats.java','VerifyAmmoDetails.java','VerifyHoldingArms.java','VerifyMuzzleEffects.java','VerifyEjections.java','VerifySounds.java','VerifyWorldEffects.java','VerifyMuzzleGlow.java','VerifyShaderMuzzleLighting.java','VerifyBulletBlocks.java','VerifySoundBundles.java','CrossPackAudit.java') |
+    Set-Content -LiteralPath 'build/offline-javac-args.txt' -Encoding ASCII -Value ('-cp ' + $classpath)
+    Set-Content -LiteralPath 'build/offline-java-args.txt' -Encoding ASCII -Value ('-cp build/offline;' + $classpath)
+    Set-Content -LiteralPath 'build/offline-data-java-args.txt' -Encoding ASCII -Value ('-cp build/offline-data;build/offline;' + $classpath)
+    $sources = @('OfflinePack.java','FPPreview.java','TPPreview.java','MaterialAudit.java','VerifyLegacyRender.java','VerifyModelTransforms.java','VerifyGunActions.java','VerifyGunModification.java','VerifyGunModificationView.java','VerifyGunAttachmentCatalog.java','VerifyMagazineData.java','VerifyReloadRendering.java','VerifyReloadInput.java','VerifyRecoilStats.java','VerifyAmmoDetails.java','VerifyHoldingArms.java','VerifyMuzzleEffects.java','VerifyEjections.java','VerifySounds.java','VerifyWorldEffects.java','VerifyMuzzleGlow.java','VerifyShaderMuzzleLighting.java','VerifyBulletBlocks.java','VerifySoundBundles.java','VerifyScopeZoom.java','VerifySightPicture.java','VerifyScopeReticles.java','VerifySightAlignment.java','VerifyGunSightState.java','VerifyCasingPhysics.java','VerifyRestWallShape.java','CrossPackAudit.java') |
         ForEach-Object { Join-Path $PSScriptRoot $_ }
     $sources += Join-Path $PSScriptRoot 'stubs/com/flansmod/common/FlansMod.java'
-    & javac -encoding UTF-8 -cp $classpath -d 'build/offline' @sources
+    & javac -encoding UTF-8 '@build/offline-javac-args.txt' -d 'build/offline' @sources
     if ($LASTEXITCODE -ne 0) { throw 'Offline tool compilation failed.' }
-    $javaOptions = @('-Dlog4j.configurationFile=tools/offline/log4j2.xml','-Djava.awt.headless=true','-Djoml.useUnsafe=false','-cp',('build/offline;' + $classpath))
+    $javaOptions = @('-Dlog4j.configurationFile=tools/offline/log4j2.xml','-Djava.awt.headless=true','-Djoml.useUnsafe=false','@build/offline-java-args.txt')
     $pack = 'run/flan/EscapeFromTarcraftReforged_1.5.3'
+    & java @javaOptions VerifyModelTransforms $pack *> 'reports/eft/model_transform_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Original model transform order contracts failed; see model_transform_verification.log.' }
     & java @javaOptions VerifyReloadInput *> 'reports/eft/reload_input_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Reload input contracts failed; see reload_input_verification.log.' }
     & java @javaOptions VerifyLegacyRender $pack *> 'reports/eft/verification.log'
@@ -31,16 +47,28 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Gun action contracts failed; see actions_verification.log.' }
     & java @javaOptions VerifyReloadRendering $pack *> 'reports/eft/reload_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Reload rendering contracts failed; see reload_verification.log.' }
+    & java @javaOptions VerifyScopeZoom $pack *> 'reports/eft/scope_zoom_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Scope magnification/parsing contracts failed; see scope_zoom_verification.log.' }
+    & java @javaOptions VerifySightPicture $pack 'run/flan/OctagonWeaponsReforged_1.33' *> 'reports/eft/sight_picture_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Sight picture/ray contracts failed; see sight_picture_verification.log.' }
+    & java @javaOptions VerifySightAlignment $pack *> 'reports/eft/sight_alignment_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Scope alignment/ocular contracts failed; see sight_alignment_verification.log.' }
+    & java @javaOptions VerifyCasingPhysics $pack *> 'reports/eft/casing_physics_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Casing physics contracts failed; see casing_physics_verification.log.' }
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyRestWallShape *> 'reports/eft/rest_wall_shape_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Muzzle-against-wall shape contracts failed; see rest_wall_shape_verification.log.' }
     New-Item -ItemType Directory -Path 'build/offline-data' -Force | Out-Null
-    & javac -encoding UTF-8 -cp $classpath -d 'build/offline-data' (Join-Path $PSScriptRoot 'data-stubs/net/neoforged/neoforge/common/util/flag/FeatureFlagLoader.java')
+    & javac -encoding UTF-8 '@build/offline-javac-args.txt' -d 'build/offline-data' (Join-Path $PSScriptRoot 'data-stubs/net/neoforged/neoforge/common/util/flag/FeatureFlagLoader.java')
     if ($LASTEXITCODE -ne 0) { throw 'Offline data fixture compilation failed.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) VerifyBulletBlocks $pack *> 'reports/eft/bullet_blocks_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyScopeReticles $pack *> 'reports/eft/scope_reticle_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Scope reticle composition contracts failed; see scope_reticle_verification.log.' }
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyBulletBlocks $pack *> 'reports/eft/bullet_blocks_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Native soft-block collision contracts failed; see bullet_blocks_verification.log.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) VerifyMuzzleGlow $pack *> 'reports/eft/muzzle_glow_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyMuzzleGlow $pack *> 'reports/eft/muzzle_glow_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Muzzle glow geometry/state contracts failed; see muzzle_glow_verification.log.' }
     $shaderClasspath = 'build/offline-data;build/offline;' + $classpath
     $irisJar = Get-ChildItem -LiteralPath 'run/mods' -Filter 'iris-neoforge*.jar' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($irisJar) { $shaderClasspath += ';' + $irisJar.FullName }
+    if ($irisJar) { $shaderClasspath += ';' + $irisJar.FullName.Replace($root + '\', '') }
     $shaderTestArgs = @($pack)
     $lwjglClasspathJar = $classpath -split ';' | Where-Object { $_ -match '[\\/]org\.lwjgl[\\/]lwjgl[\\/]' } | Select-Object -First 1
     if ($lwjglClasspathJar) {
@@ -48,21 +76,28 @@ try {
         $lwjglNative = Get-ChildItem -LiteralPath $lwjglVersionPath -Recurse -Filter '*natives-windows.jar' -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($lwjglNative) { $shaderClasspath += ';' + $lwjglNative.FullName; $shaderTestArgs += '--native-smoke' }
     }
-    & java '-Dorg.lwjgl.system.allocator=system' '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp $shaderClasspath VerifyShaderMuzzleLighting @shaderTestArgs *> 'reports/eft/shader_muzzle_verification.log'
+    Set-Content -LiteralPath 'build/offline-shader-java-args.txt' -Encoding ASCII -Value ('-cp ' + $shaderClasspath)
+    & java '-Dorg.lwjgl.system.allocator=system' '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-shader-java-args.txt' VerifyShaderMuzzleLighting @shaderTestArgs *> 'reports/eft/shader_muzzle_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Shader light/projection/lifecycle contracts failed; see shader_muzzle_verification.log.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' -cp ('build/offline-data;build/offline;'+$classpath) VerifyMagazineData $pack *> 'reports/eft/magazine_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '@build/offline-data-java-args.txt' VerifyMagazineData $pack *> 'reports/eft/magazine_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Actual magazine/NBT contracts failed; see magazine_verification.log.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) VerifyEjections $pack *> 'reports/eft/ejections_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyGunModification $pack *> 'reports/eft/gun_modification_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Actual gun modification inventory/save contracts failed; see gun_modification_verification.log.' }
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyGunModificationView $pack *> 'reports/eft/gun_modification_view_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Gun modification framing/normals contracts failed.' }
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyGunAttachmentCatalog $pack *> 'reports/eft/gun_attachment_catalog_verification.log'
+    if ($LASTEXITCODE -ne 0) { throw 'Gun attachment catalogue/preview contracts failed.' }
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyEjections $pack *> 'reports/eft/ejections_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Original casing physics/assets/item contracts failed.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) VerifySounds $pack *> 'reports/eft/sounds_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifySounds $pack *> 'reports/eft/sounds_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Pack sound resources/vanilla sound packet contracts failed.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) com.flansmod.common.VerifySoundBundles *> 'reports/eft/sound_bundle_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' com.flansmod.common.VerifySoundBundles *> 'reports/eft/sound_bundle_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Combined pack sound registration contracts failed.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) CrossPackAudit 'run/flan' 'reports/eft/crosspack' *> 'reports/eft/crosspack_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' CrossPackAudit 'run/flan' 'reports/eft/crosspack' *> 'reports/eft/crosspack_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Cross-pack resource inspection failed.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) VerifyRecoilStats $pack *> 'reports/eft/recoil_stats_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyRecoilStats $pack *> 'reports/eft/recoil_stats_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Recoil/stat contracts failed; see recoil_stats_verification.log.' }
-    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' -cp ('build/offline-data;build/offline;'+$classpath) VerifyAmmoDetails $pack *> 'reports/eft/ammo_stats_verification.log'
+    & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyAmmoDetails $pack *> 'reports/eft/ammo_stats_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Ammo tooltip contracts failed; see ammo_stats_verification.log.' }
     & java @javaOptions MaterialAudit $pack $OriginalPack 'reports/eft/materials' *> 'reports/eft/material_audit.log'
     if ($LASTEXITCODE -ne 0) { throw 'Material audit failed; see material_audit.log.' }

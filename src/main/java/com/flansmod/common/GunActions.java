@@ -21,10 +21,13 @@ public final class GunActions {
 	public static void ensureHeld(Player player, PlayerData data) {
 		GunType gun = player.isAlive()?firearm(player.getMainHandItem()):null;
 		int slot = player.getInventory().selected;
-		if(gun == data.actionGun && slot == data.actionSlot && player.level() == data.actionLevel) return;
+		int attachmentRevision=GunAttachments.revision(player.getMainHandItem());
+		if(gun == data.actionGun && slot == data.actionSlot && player.level() == data.actionLevel && attachmentRevision==data.actionAttachmentRevision) return;
 		if(data.gunReload.active()) GunReloading.cancel(player,data);
 		data.actionGun = gun; data.actionSlot = slot; data.actionLevel = player.level();
-		data.effectiveTakeOut = gun == null ? 0F : gun.takeOutTime * takeOutMultiplier(gun.defaultAttachments, 0);
+		data.actionAttachmentRevision=attachmentRevision;
+		data.sightFoldUntilTick=0;
+		data.effectiveTakeOut = gun == null ? 0F : gun.takeOutTime * takeOutMultiplier(GunAttachments.read(gun,player.getMainHandItem()), 0);
 		data.gunAction.equip(data.effectiveTakeOut);
 		data.pendingGunReload = data.pendingGunTrigger = data.isShootingRight = false;
 		data.reloadingRight = false; data.shootTimeRight = 0F;
@@ -49,14 +52,14 @@ public final class GunActions {
 	}
 	public static boolean ready(Player player, PlayerData data) {
 		ensureHeld(player, data);
-		return data.gunAction.ready() && !nearWall(player, data.actionGun);
+		return !data.sightFolding(player) && data.gunAction.ready() && !nearWall(player, data.actionGun);
 	}
 	public static boolean request(Player player, Operation requested) {
 		PlayerData data = PlayerHandler.getPlayerData(player);
 		if(data == null) return false;
 		ensureHeld(player, data);
 		GunType gun = data.actionGun;
-		if(gun == null || data.isReloading() || data.pendingGunReload || data.pendingGunTrigger) return false;
+		if(gun == null || data.sightFolding(player) || data.isReloading() || data.pendingGunReload || data.pendingGunTrigger) return false;
 		if(requested == Operation.REST) { data.gunAction.toggleRest(); return true; }
 		float length;
 		if(requested == Operation.CHECK_AMMO) {
@@ -78,7 +81,7 @@ public final class GunActions {
 		data.actionTick = player.tickCount;
 		GunType gun = data.actionGun;
 		if(gun == null) return;
-		data.gunAimProgress=Math.clamp(data.gunAimProgress+(data.gunAimDown && !data.gunAction.manualRest && data.gunAction.takeOut==0F?.2F:-.2F),0F,1F);
+		data.gunAimProgress=Math.clamp(data.gunAimProgress+(data.gunAimDown && !data.sightFolding(player) && !data.gunAction.manualRest && data.gunAction.takeOut==0F?.2F:-.2F),0F,1F);
 		Operation operation = data.gunAction.operation == Operation.NONE && data.gunAction.queued != Operation.NONE
 				? data.gunAction.queued : data.gunAction.operation;
 		boolean ammo = operation == Operation.CHECK_AMMO;
@@ -151,25 +154,34 @@ public final class GunActions {
 	}
 	public static boolean nearWall(Player player, GunType gun) {
 		if(gun == null) return false;
-		float length = gunLength(gun, 0F, 0) + gun.gunLengthOffset;
+		float length = gunLength(GunAttachments.view(gun,player.getMainHandItem()), 0F, 0) + gun.gunLengthOffset;
 		if(length <= 0F) return false;
 		var data=PlayerHandler.getPlayerData(player);
 		var model=ACTION_MODELS.computeIfAbsent(gun,com.flansmod.client.model.loader.ModelCache::load);
 		if(model!=null && (data.gunWallRay==null || (!player.level().isClientSide && data.gunAction.operation==Operation.NONE && !player.isSprinting())))
-			data.gunWallRay=com.flansmod.client.render.FmumCollisionRay.local(model,gun,data.gunAimProgress,com.flansmod.client.render.LegacyGunMotion.Frame.ZERO);
+			data.gunWallRay=com.flansmod.client.render.FmumCollisionRay.local(model,GunAttachments.view(gun,player.getMainHandItem()),data.gunAimProgress,com.flansmod.client.render.LegacyGunMotion.Frame.ZERO);
 		var ray=data.gunWallRay==null?null:com.flansmod.client.render.FmumCollisionRay.world(data.gunWallRay,player.getYRot(),player.getXRot());
 		var start=player.getEyePosition();
 		var direction=player.getLookAngle();
 		if(ray!=null) { start=start.add(ray.origin().x,ray.origin().y,ray.origin().z); direction=new net.minecraft.world.phys.Vec3(ray.direction().x,ray.direction().y,ray.direction().z); }
 		return player.level().clip(new ClipContext(start, start.add(direction.scale(length)),
-				ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player)).getType() == HitResult.Type.BLOCK;
+				// COLLIDER, not OUTLINE. The two shapes differ for every plant: short grass,
+				// tall grass, flowers and crops are marked noCollission, so their collision shape
+				// is empty while their outline is still a 14x13x14 box. 1.7.10's rayTrace passed
+				// ignoreBlockWithoutBoundingBox=true, which skipped exactly those blocks, so a gun
+				// pointed into grass never lowered. OUTLINE reintroduced the lowering.
+				ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player)).getType() == HitResult.Type.BLOCK;
 	}
 	public static float gunLength(ModifiableType owner, float x, int depth) {
 		if(depth > 16) return x;
-		float max = x;
-		var boxes=owner.hitBoxes.isEmpty()?owner.bigHitBoxes:owner.hitBoxes;
-		for(float[][] box : boxes) for(float[] point : box) max = Math.max(max, x + point[0] * owner.modelScale);
+		float max = bodyLength(owner,x);
 		for(var nodes : owner.defaultAttachments) max = Math.max(max, nodeLength(owner, nodes, x, depth));
+		return max;
+	}
+	private static float bodyLength(ModifiableType owner,float x) {
+		float max=x;
+		var boxes=owner.hitBoxes.isEmpty()?owner.bigHitBoxes:owner.hitBoxes;
+		for(float[][] box:boxes) for(float[] point:box)max=Math.max(max,x+point[0]*owner.modelScale);
 		return max;
 	}
 	private static float nodeLength(ModifiableType owner, List<ModifiableType.DefaultAttachment> nodes, float x, int depth) {
@@ -178,7 +190,8 @@ public final class GunActions {
 			AttachmentType at = AttachmentType.getAttachment(node.name);
 			if(at == null || node.slot < 0 || node.slot >= owner.slots.length) continue;
 			float origin = x + owner.slots[node.slot].x + node.pos;
-			max = Math.max(max, Math.max(gunLength(at, origin, depth + 1), nodeLength(at, node.children, origin, depth + 1)));
+			if(depth>=16) continue;
+			max = Math.max(max, Math.max(bodyLength(at, origin), nodeLength(at, node.children, origin, depth + 1)));
 		}
 		return max;
 	}

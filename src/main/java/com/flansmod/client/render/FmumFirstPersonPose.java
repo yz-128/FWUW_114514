@@ -71,23 +71,59 @@ public final class FmumFirstPersonPose
 	/** EFT core RenderGun bytecode 3093..3207: translate, rotate, undo the pivot. */
 	public static Matrix4f aim(Matrix4f pose, ModifiableType type, float ads)
 	{
+		return aim(pose, type, ads, DEFAULT_EYE);
+	}
+
+	/**
+	 * Brings the selected sight's optical axis onto the eye.
+	 *
+	 * <p>1.7.10 translated the sight to a hardcoded {@code y = 0.4} because its first-person
+	 * camera was assumed to sit at the fixed point {@code (-81.5/160, 0.4, 0)} in gun space. That
+	 * assumption only holds for the pose the pack tuned its holdings against. Measured in this
+	 * port, the camera actually lands at a different height for every gun — AK74M 0.320, DT MDR
+	 * 0.269 — so a fixed target leaves the optic 0.05–0.13 blocks above the eye, and a red dot's
+	 * ray misses its own aperture entirely.
+	 *
+	 * <p>Passing the camera's actual gun-space position keeps the original's translate/rotate/undo
+	 * structure while making it exact for any pose. X is left alone on purpose: that distance is
+	 * the shooter's eye relief, which the pack shapes through the mount.
+	 */
+	public static Matrix4f aim(Matrix4f pose, ModifiableType type, float ads, org.joml.Vector3f eye)
+	{
 		if(type instanceof com.flansmod.common.types.GunType gun)
 		{
 			LegacySightPose.Center sight = LegacySightPose.forGun(gun);
-			return aim(pose, sight, ads);
+			return aim(pose, sight, ads, eye);
 		}
-		return aim(pose, type.aimCenterX, type.aimCenterY, type.aimCenterZ, ads);
+		return aim(pose, type.aimCenterX, type.aimCenterY, type.aimCenterZ, ads, eye);
 	}
+
+	/** 1.7.10's fixed first-person eye point, in gun-local blocks. */
+	public static final org.joml.Vector3f DEFAULT_EYE = new org.joml.Vector3f(-81.5F / 160F, 0.4F, 0F);
 
 	public static Matrix4f aim(Matrix4f pose, LegacySightPose.Center sight, float ads)
 	{
-		return aim(pose, sight.roll(), sight.y(), sight.z(), ads);
+		return aim(pose, sight, ads, DEFAULT_EYE);
 	}
 
-	private static Matrix4f aim(Matrix4f pose, float roll, float y, float z, float ads)
+	/** Sight-centre pivot targeting an explicit eye point, used by the renderer's live camera. */
+	public static Matrix4f aim(Matrix4f pose, LegacySightPose.Center sight, float ads, org.joml.Vector3f eye)
 	{
-		return pose.translate(0F, (0.4F - y) * ads + y, -z * ads + z)
+		return aim(pose, sight.roll(), sight.y(), sight.z(), ads, eye);
+	}
+
+	private static Matrix4f aim(Matrix4f pose, float roll, float y, float z, float ads, org.joml.Vector3f eye)
+	{
+		float targetY = Float.isFinite(eye.y) ? eye.y : DEFAULT_EYE.y;
+		float targetZ = Float.isFinite(eye.z) ? eye.z : DEFAULT_EYE.z;
+		return pose.translate(0F, (targetY - y) * ads + y, (targetZ - z) * ads + z)
 				.rotateX(rad(-roll * ads)).translate(0F, -y, -z);
+	}
+
+	/** The camera's position in the gun-local frame the pose currently describes. */
+	public static org.joml.Vector3f eyeInGunSpace(Matrix4f accumulatedPose)
+	{
+		return new Matrix4f(accumulatedPose).invert().transformPosition(new org.joml.Vector3f());
 	}
 
 	private static float[] blend(ModelGeometry.Model model, String suffix, float ads, float sprint, float reload)

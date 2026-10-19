@@ -40,6 +40,8 @@ public final class BakedRig
 	 * {@link #quads} is kept as the flat list for everything that draws the whole gun at once.
 	 */
 	public final Map<String, List<Quad>> quadsByPart = new LinkedHashMap<>();
+	/** Renderer-array elements for multi-point reticles; selecting a dot must not repeat the whole mesh. */
+	public final Map<String, List<Quad>> quadsByRenderer = new LinkedHashMap<>();
 
 	public float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, minZ = Float.MAX_VALUE;
 	public float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
@@ -226,6 +228,7 @@ public final class BakedRig
 					rig.quads.add(quad);
 					// Filed by part as well, so the renderer can move one part on its own.
 					rig.quadsByPart.computeIfAbsent(part.name, k -> new ArrayList<>()).add(quad);
+					if(box.renderer!=null)rig.quadsByRenderer.computeIfAbsent(box.renderer,k->new ArrayList<>()).add(quad);
 				}
 
 				rig.expand(bit, unit);

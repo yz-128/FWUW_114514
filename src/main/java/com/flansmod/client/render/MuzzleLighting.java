@@ -14,11 +14,11 @@ public final class MuzzleLighting {
 		if(gun.itsType==GunType.GunItsType.MAG || player!=Minecraft.getInstance().player)return 0;
 		boolean offHand=stack==player.getOffhandItem();
 		if(!offHand && stack!=player.getMainHandItem())return 0;
-		return level(gun,GunAnimationRegistry.get(player,offHand).effects,
+		return level(com.flansmod.common.GunAttachments.view(gun,stack),GunAnimationRegistry.get(player,offHand).effects,
 				Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true));
 	}
 	public static int level(GunType gun,FmumShotEffects shot,float partial) {
-		if(gun.itsType==GunType.GunItsType.MAG || shot.gun!=gun || shot.fade<=0F)return 0;
+		if(gun.itsType==GunType.GunItsType.MAG || shot.gun!=gun.definition() || shot.fade<=0F)return 0;
 		float alpha=shot.alpha(partial);
 		if(alpha<1F/255F)return 0;
 		// Use the configuration selected when the shot was confirmed, including suppressors.

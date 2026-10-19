@@ -111,6 +111,7 @@ public class FlansMod
 		registerPackRepository(modEventBus);
 
 		ENTITIES.register(modEventBus);
+		com.flansmod.common.inventory.GunModificationMenus.register(modEventBus);
 	}
 
 	/**
@@ -352,6 +353,9 @@ public class FlansMod
 			}
 		}
 		log("Parsed " + InfoType.infoTypes.size() + " definition(s)");
+		for(InfoType definition : InfoType.infoTypes)
+			if(definition instanceof com.flansmod.common.types.ModifiableType modifiable)
+				modifiable.resolveDefaultAttachments();
 		linkGunAmmo();
 	}
 

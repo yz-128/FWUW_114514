@@ -476,7 +476,7 @@ public final class GunMagazine
 		ItemStack bullet=getChamberedRound(gun);
 		if(bullet.isEmpty()) return ItemStack.EMPTY;
 		setChamberedRound(gun,ItemStack.EMPTY);
-		if(type.itsType==GunType.GunItsType.BOLT_GUN) {
+		if(type.itsType==GunType.GunItsType.BOLT_GUN || !GunAttachments.requirements(type,gun,1)) {
 			var round=com.flansmod.common.types.InfoType.getType(bullet);
 			GunCasings.retain(gun,round instanceof com.flansmod.common.types.BulletType b?GunCasings.casing(b):null);
 		} else ensureChamber(gun,type);

@@ -1,0 +1,12 @@
+{
+  "artifact": "E:\\JAVAMCMODGJ\\FLAN 移植i\\flanmod-template-1.21.1\\build\\libs\\flansmod-0.4.4.jar",
+  "size": 600606,
+  "sha256": "1D441E7E564ED3394824C439C73D6B8BDDD8AE787057575132504E04C33B456B",
+  "class_versions": {
+    "65": 218
+  },
+  "checked_at": "2026-10-19T02:03:50.0953834+08:00",
+  "test_logs": "build/verification-optics-0.4.4",
+  "game_started": false,
+  "gpu_test": "invisible GLFW window; actual production copy method"
+}

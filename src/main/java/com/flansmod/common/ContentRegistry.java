@@ -19,6 +19,8 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 import com.flansmod.common.types.EnumType;
 import com.flansmod.common.types.InfoType;
 import com.flansmod.common.types.ItemFlan;
+import com.flansmod.common.types.ArmourType;
+import com.flansmod.common.types.ItemFlanArmour;
 
 /**
  * Turns every parsed content-pack definition into a registered item.
@@ -73,7 +75,8 @@ public final class ContentRegistry
 			// item's own data instead — which is exactly the choice the 1.20.1 build made too
 			// (FlansModUltimate's ShootableItem stores them under an NBT key "rounds").
 			Item.Properties properties = new Item.Properties().stacksTo(stackSize(type));
-			ItemFlan item = new ItemFlan(type, properties);
+			Item item = type instanceof ArmourType armour
+					? new ItemFlanArmour(armour, properties) : new ItemFlan(type, properties);
 			event.register(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(FlansMod.MODID, path), () -> item);
 			registered.put(path, type);
 			ItemAssets.register(path, type);

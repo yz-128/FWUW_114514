@@ -31,6 +31,36 @@ public class ItemFlan extends Item
 		type.item = this;
 	}
 
+	/**
+	 * The gun's movement-speed penalty, as 1.7.10 put on {@code ItemGun}.
+	 *
+	 * <p>The old item added a {@code MOVEMENT_SPEED} modifier of
+	 * {@code gun.getMoveSpeed(stack) - 1}, where the gun's {@code MoveSpeedModifier} was multiplied
+	 * by every mounted part's {@code MoveSpeedMultiplier}. Only the held stack's own tree counts,
+	 * so a lighter build walks faster than a loaded one.
+	 */
+	@Override
+	public net.minecraft.world.item.component.ItemAttributeModifiers getDefaultAttributeModifiers(ItemStack stack)
+	{
+		var base = super.getDefaultAttributeModifiers(stack);
+		if(!(type instanceof GunType gun))
+			return base;
+		float modifier = gun.moveSpeedModifier * com.flansmod.common.GunStats.moveSpeedMultiplier(gun, stack) - 1F;
+		if(Math.abs(modifier) < 1e-4F)
+			return base;
+		var builder = net.minecraft.world.item.component.ItemAttributeModifiers.builder();
+		for(var entry : base.modifiers())
+			builder.add(entry.attribute(), entry.modifier(), entry.slot());
+		builder.add(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED,
+				new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+						net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+								FlansMod.MODID, "gun_movement_speed"),
+						modifier,
+						net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL),
+				net.minecraft.world.entity.EquipmentSlotGroup.MAINHAND);
+		return builder.build();
+	}
+
 	/** The registry name this item is registered under — the pack's {@code ShortName}. */
 	public String registryName()
 	{
@@ -72,6 +102,32 @@ public class ItemFlan extends Item
 	public String getDescriptionId()
 	{
 		return com.flansmod.common.ItemAssets.packTranslationKey(type, registryName());
+	}
+
+	@Override
+	public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flags)
+	{
+		super.appendHoverText(stack, context, lines, flags);
+		if(type instanceof AttachmentType attachment)
+		{
+			lines.add(Component.translatable("attachment.flansmod.interface", attachment.attachmentType)
+					.withStyle(ChatFormatting.DARK_GRAY));
+			var parents = com.flansmod.common.GunAttachmentCatalog.directParents(attachment).stream()
+					.map(com.flansmod.common.GunAttachmentCatalog.ParentMount::parent).distinct().toList();
+			if(!parents.isEmpty())
+			{
+				var names = Component.empty();
+				for(int i=0;i<Math.min(3,parents.size());i++)
+				{
+					if(i>0) names.append(" / ");
+					var parent = parents.get(i);
+					names.append(parent.item == null ? Component.literal(parent.displayName())
+							: parent.item.getName(new ItemStack(parent.item)));
+				}
+				if(parents.size()>3) names.append(" ").append(Component.translatable("attachment.flansmod.more",parents.size()-3));
+				lines.add(Component.translatable("attachment.flansmod.parents",names).withStyle(ChatFormatting.GRAY));
+			}
+		}
 	}
 
 	/** Ammo, chamber and mode updates must not stack vanilla's equip dip onto FMUM actions. */

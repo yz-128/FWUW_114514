@@ -32,7 +32,7 @@ public final class VerifyEjections implements Opcodes {
    check(FmumCasing.origin(m,new Matrix4f()).isFinite(),"real pack origin or original ModelGun zero default: "+g.shortName);
    for(boolean manual:new boolean[]{false,true}) {
     var effect=new FmumCasing(BulletType.getBullet("556x45mmCasing"),m,new Matrix4f().rotateY(.3F).scale(.4F),manual,8L,0F);
-    for(int i=0;i<effect.lifetime;i++){check(effect.pose(.5F).isFinite(),"finite trajectory/spin: "+g.shortName);effect.tick();}
+    for(int i=0;i<effect.lifetime;i++){check(effect.pose(.5F).isFinite(),"finite trajectory/spin: "+g.shortName);effect.tick(null,0,0,0);}
     check(!effect.alive(),"model-defined lifetime: "+g.shortName);
    }
    System.out.printf("%s %s origin=%s lifetime=%.0f%n",g.shortName,g.itsType,Arrays.toString(FmumActionPose.vector(m,"caseOrigin")),FmumActionPose.scalar(m,"caseTime",30F));
@@ -121,9 +121,13 @@ public final class VerifyEjections implements Opcodes {
     original.getMethod("set",vector,float.class,float.class,float.class,vector,vector,vector).invoke(real,v(vector,new float[3]),0F,0F,0F,render.getField("caseTrans").get(null),v(vector,new float[3]),render.getField("caseRot").get(null));original.getField("time").setInt(real,0);
     for(int i=0;i<=30;i++) {
      compare(vector,original.getField("pos").get(real),ours.position,"core position tick "+i);compare(vector,original.getField("lastPos").get(real),ours.lastPosition,"core interpolation tick "+i);compare(vector,original.getField("velocity").get(real),ours.velocity,"core gravity/friction tick "+i);
-     close(original.getField("rotProgress").getFloat(real),ours.spin,"core spin tick "+i);close(original.getField("lastRotProgress").getFloat(real),ours.lastSpin,"core spin interpolation tick "+i);check((Boolean)original.getMethod("isDead").invoke(real)==!ours.alive(),"core lifetime tick "+i);
-     original.getMethod("update",float.class,float.class,float.class).invoke(real,0F,0F,0F);ours.tick();
+     close(original.getField("rotProgress").getFloat(real),ours.spin,"core spin tick "+i);close(original.getField("lastRotProgress").getFloat(real),ours.lastSpin,"core spin interpolation tick "+i);
+     // Flight physics must match the original tick for tick throughout its life. Lifetime is a
+     // deliberate change (the port keeps a case in the world longer), so it is checked as a ratio
+     // rather than as tick-by-tick death equality.
+     original.getMethod("update",float.class,float.class,float.class).invoke(real,0F,0F,0F);ours.tick(null,0,0,0);
     }
+    check((int)(30*FmumCasing.LIFETIME_MULTIPLIER)==ours.lifetime,"lifetime is the original 30 ticks times the multiplier");
    }
   }
   System.out.println("Original EFT GunCase executed unchanged: 62 physics/lifetime samples and both seeded ejection profiles match.");

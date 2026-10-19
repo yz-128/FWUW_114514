@@ -17,12 +17,22 @@ public final class FlanNetwork
 	 * A version string that must match on both sides. It exists so a mismatch is a clear error
 	 * rather than a silently dropped packet; bump it whenever a payload's fields change.
 	 */
-	// Server-confirmed ejections carry the actual round/casing before chamber contents change.
-	private static final String VERSION = "8";
+	// Per-stack optical controls carry both structure and sight-state revisions.
+	private static final String VERSION = "12";
 
 	@SubscribeEvent
 	public static void register(final RegisterPayloadHandlersEvent event)
 	{
+		event.registrar(VERSION).playToClient(GunSightAnimationPayload.TYPE,GunSightAnimationPayload.STREAM_CODEC,
+				(payload,context)->context.enqueueWork(()->com.flansmod.client.SightFoldAnimations.accept(payload)));
+		event.registrar(VERSION).playToServer(GunSightPayload.TYPE,GunSightPayload.STREAM_CODEC,
+				(payload,context)->context.enqueueWork(()->com.flansmod.common.GunSightState.request(context.player(),payload)));
+		event.registrar(VERSION).playToServer(GunModificationPayload.TYPE,GunModificationPayload.STREAM_CODEC,
+				(payload,context)->context.enqueueWork(()->{
+					if(!(context.player() instanceof net.minecraft.server.level.ServerPlayer player)) return;
+					if(payload.operation()==GunModificationPayload.OPEN) com.flansmod.common.inventory.GunModificationMenu.open(player);
+					else if(player.containerMenu instanceof com.flansmod.common.inventory.GunModificationMenu menu) menu.modify(player,payload);
+				}));
 		event.registrar(VERSION).playToClient(GunEjectionPayload.TYPE,GunEjectionPayload.STREAM_CODEC,
 				(payload,context)->context.enqueueWork(()->com.flansmod.client.render.MuzzleEffectsRenderer.ejection(payload)));
 		event.registrar(VERSION).playToClient(GunShotPayload.TYPE,GunShotPayload.STREAM_CODEC,

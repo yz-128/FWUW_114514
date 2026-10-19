@@ -1,0 +1,24 @@
+{
+  "project": "flanmod-template-1.21.1",
+  "version": "0.4.1",
+  "jar": "E:\\JAVAMCMODGJ\\FLAN 移植i\\flanmod-template-1.21.1\\build\\libs\\flansmod-0.4.1.jar",
+  "bytes": 491646,
+  "sha256": "A72C9DAE84B3383B7B0A921EE6DE8E6F6D559F931CDEE2555D410E046D43623F",
+  "entries": 223,
+  "java21_compatible_classes": 186,
+  "backup": "E:\\JAVAMCMODGJ\\FLAN 移植i\\BACKUP_flan_before_bocchi_slide_20261018_204058",
+  "model_transform_assertions": 1463,
+  "models_call_order_audited": 365,
+  "constructor_calls_audited": 392,
+  "Bocchi_renderer_pivots": 329,
+  "regression_tests": [
+    "VerifyLegacyRender",
+    "VerifyHoldingArms",
+    "VerifyReloadRendering",
+    "VerifyGunActions"
+  ],
+  "gradle_build": "PASS",
+  "gradle_junit_tests": "NO-SOURCE",
+  "in_game_verification": "Pending manual restart",
+  "deepseek_status": "Tasks prepared in COLLABORATION.md; no receipt received"
+}

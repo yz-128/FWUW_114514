@@ -32,7 +32,7 @@ public class ModifiableType extends InfoType
 		/** Extra rotation applied to whatever is mounted here, in degrees. */
 		public float rotate;
 		/** How many parts may be mounted on this slot at once. */
-		public int maxCanAttach = 1;
+		public int maxCanAttach = 64;
 	}
 
 	public AttachableSlot[] slots = new AttachableSlot[0];
@@ -56,7 +56,9 @@ public class ModifiableType extends InfoType
 	public final List<List<String>> attachmentBlacklist = new ArrayList<>();
 
 	/** The loadout a fresh gun comes with: per slot, a tree of parts mounted on each other. */
-	public final List<List<DefaultAttachment>> defaultAttachments = new ArrayList<>();
+	public List<List<DefaultAttachment>> defaultAttachments = new ArrayList<>();
+	/** Original token groups, retained because referenced attachments may be read later. */
+	private final List<String[]> defaultAttachmentLines = new ArrayList<>();
 
 	/** Parts that must be present before the gun will shoot / fire automatically / charge. */
 	public final List<String> neededToShoot = new ArrayList<>(), neededToAuto = new ArrayList<>(),
@@ -85,8 +87,12 @@ public class ModifiableType extends InfoType
 		public int slot;
 		public int step;
 		public int offset;
+		/** Per-instance optical settings; never written into a shared AttachmentType. */
+		public int zoomStep, dotFrame;
 		/** Paintjob index or part id, when the line carried one; null when it did not. */
 		public Integer paintjob;
+		/** Original item components, retained while this part is mounted. */
+		public net.minecraft.nbt.CompoundTag itemData;
 		public final List<DefaultAttachment> children = new ArrayList<>();
 	}
 
@@ -215,7 +221,10 @@ public class ModifiableType extends InfoType
 				case "TypeWhitelist" -> parseSlotList(split, typeWhitelist);
 				case "TypeBlacklist" -> parseSlotList(split, typeBlacklist);
 
-				case "DefaultAttachments" -> parseDefaultAttachments(split);
+				case "DefaultAttachments" -> {
+					defaultAttachmentLines.add(split.clone());
+					parseDefaultAttachments(split);
+				}
 
 				// A paintjob is a named skin: the texture to draw with and the dye that buys it.
 				// Kept verbatim; the paintjob table block itself is a later port.
@@ -281,6 +290,8 @@ public class ModifiableType extends InfoType
 	private void parseDefaultAttachments(String[] split)
 	{
 		int[] at = { 1 };
+		int[] budget = { Math.max(0, com.flansmod.common.GunAttachments.MAX_NODES
+				- com.flansmod.common.GunAttachments.count(defaultAttachments)) };
 		int slot = 0;
 		List<DefaultAttachment> group = new ArrayList<>();
 		while(at[0] < split.length)
@@ -299,7 +310,7 @@ public class ModifiableType extends InfoType
 			}
 			else
 			{
-				DefaultAttachment node = parseDefaultNode(split, at, slot);
+				DefaultAttachment node = parseDefaultNode(split, at, slot, 0, budget);
 				if(node != null)
 					group.add(node);
 			}
@@ -307,8 +318,23 @@ public class ModifiableType extends InfoType
 		defaultAttachments.add(group);
 	}
 
+	/**
+	 * Call once all content definitions are registered. Rebuilds only authored default trees;
+	 * never re-reads/scales the definition and never touches saved per-item custom assemblies.
+	 * References are not implicitly expanded into the referenced type's own default tree, so
+	 * circular names cannot recurse; explicit bracket trees are depth/node bounded below.
+	 */
+	public void resolveDefaultAttachments()
+	{
+		if(defaultAttachmentLines.isEmpty()) return;
+		defaultAttachments = new ArrayList<>();
+		for(String[] line : defaultAttachmentLines) parseDefaultAttachments(line);
+		for(List<DefaultAttachment> group : defaultAttachments)
+			for(DefaultAttachment node : group) applyNodePositions(node, this);
+	}
+
 	/** One attachment node plus, recursively, anything it mounts. */
-	private DefaultAttachment parseDefaultNode(String[] split, int[] at, int slot)
+	private DefaultAttachment parseDefaultNode(String[] split, int[] at, int slot, int depth, int[] budget)
 	{
 		if(at[0] >= split.length)
 			return null;
@@ -316,13 +342,13 @@ public class ModifiableType extends InfoType
 		DefaultAttachment node = new DefaultAttachment();
 		node.name = split[at[0]++];
 		node.slot = slot;
-		// A node whose name the pack never defined is dropped, as FMUM drops it — the tree then
-		// simply does not contain the part instead of carrying a name that can never resolve.
-		if(AttachmentType.getAttachment(node.name) == null)
+		// Missing names are retried after ALL definitions load, then genuinely missing names drop.
+		if(AttachmentType.getAttachment(node.name) == null || depth >= com.flansmod.common.GunAttachments.MAX_DEPTH || budget[0] <= 0)
 		{
 			skipNodeBody(split, at);
 			return null;
 		}
+		budget[0]--;
 
 		// Up to three values may follow a name, and FMUM reads them in this order: the slot step,
 		// the attach-offset index, and a paintjob (a number, or a part's short name). Anything
@@ -356,7 +382,7 @@ public class ModifiableType extends InfoType
 					at[0]++;
 					continue;
 				}
-				DefaultAttachment child = parseDefaultNode(split, at, childSlot);
+				DefaultAttachment child = parseDefaultNode(split, at, childSlot, depth + 1, budget);
 				if(child != null)
 					node.children.add(child);
 			}
@@ -371,7 +397,7 @@ public class ModifiableType extends InfoType
 	{
 		// Optional numbers belong to the rejected node and must be skipped too.
 		int guard = 0;
-		while(at[0] < split.length && isInt(split[at[0]]) && guard++ < 2)
+		while(at[0] < split.length && isInt(split[at[0]]) && guard++ < 3)
 			at[0]++;
 		if(at[0] < split.length && split[at[0]].equals("["))
 		{

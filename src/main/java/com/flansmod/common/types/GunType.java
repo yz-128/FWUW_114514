@@ -17,8 +17,21 @@ import com.flansmod.common.FlansMod;
  * <p>Where the old field name differed between pack eras the loader accepts both spellings,
  * exactly as 1.7.10 did (for instance {@code Accuracy} and {@code Spread}).
  */
-public class GunType extends ModifiableType
+public class GunType extends ModifiableType implements Cloneable
 {
+	private GunType originalDefinition;
+	/** Runtime assembly view only; the registered definition always starts at group zero. */
+	public int selectedSightGroup;
+	/** A read-only assembly view; never runs a constructor or alters the registered definition. */
+	public GunType withAttachments(java.util.List<java.util.List<DefaultAttachment>> tree) {
+		try {
+			GunType view = (GunType)super.clone();
+			view.originalDefinition = definition();
+			view.defaultAttachments = tree;
+			return view;
+		} catch(CloneNotSupportedException impossible) { throw new AssertionError(impossible); }
+	}
+	public GunType definition() { return originalDefinition == null ? this : originalDefinition; }
 	/** Ammo this gun accepts, by {@code ShortName}. Resolved to BulletType after all packs load. */
 	public final List<String> ammoNames = new ArrayList<>();
 	public final List<BulletType> ammo = new ArrayList<>();

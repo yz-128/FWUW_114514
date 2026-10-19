@@ -211,6 +211,8 @@ public final class GunFiring
 								   PlayerData data, boolean left, boolean firstRound)
 	{
 		float shootTime = left ? data.shootTimeLeft : data.shootTimeRight;
+		if(player.containerMenu instanceof com.flansmod.common.inventory.GunModificationMenu) return;
+		if(!GunAttachments.requirements(gun,stack,0)) return;
 		if(!left && !GunActions.ready(player, data)) return;
 		if(shootTime > 0)
 			return;                                    // still cooling down, or mid-reload
@@ -374,7 +376,7 @@ public final class GunFiring
 	static void fireRound(Level level, Player player, ItemStack stack, GunType gun, PlayerData data,
 						  boolean left, int chamber)
 	{
-		GunStats.Values stats=GunStats.effective(gun);
+		GunStats.Values stats=GunStats.effective(gun,stack);
 		GunStats.Shot kick=level.isClientSide && !left?GunStats.shot(gun,stack,player.isShiftKeyDown(),
 				level.random.nextFloat(),level.random.nextFloat()):null;
 		// Spend the round. Both ammunition models go through the same call: it counts a magazine's
@@ -410,7 +412,7 @@ public final class GunFiring
 		{
 			net.neoforged.neoforge.network.PacketDistributor.sendToPlayersTrackingEntityAndSelf(player,
 					new com.flansmod.common.network.GunShotPayload(player.getId(),gun.shortName,left,level.random.nextLong()));
-			if(gun.itsType==GunType.GunItsType.AUTO_GUN)GunCasings.eject(player,gun,GunCasings.casing(loadedDefinition),false);
+			if(gun.itsType==GunType.GunItsType.AUTO_GUN && GunAttachments.requirements(gun,stack,1))GunCasings.eject(player,gun,GunCasings.casing(loadedDefinition),false);
 			else if(!left && gun.itsType==GunType.GunItsType.BOLT_GUN) {
 				data.boltChargeDelay=Math.max(0,gun.chargeDelay);data.boltChargeStack=stack;
 			}
@@ -434,7 +436,7 @@ public final class GunFiring
 			data.burstRoundsRemainingRight = gun.numBurstRounds - 1;
 
 		if(loadedDefinition!=null) {
-			var sound=FmumSounds.shot(gun);
+			var sound=FmumSounds.shot(GunAttachments.view(gun,stack));
 			FmumSounds.play(player,sound.name(),sound.range(),gun.distortSound,sound.silenced());
 		}
 	}

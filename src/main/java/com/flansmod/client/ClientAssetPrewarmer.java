@@ -37,8 +37,8 @@ public final class ClientAssetPrewarmer {
     private ClientAssetPrewarmer() { }
     public static final int RIGS_PER_TICK = 2;
     private record Slot(Item item, CustomData data, ResourceLocation skin) { }
-    // Fixed slots retain at most eleven immutable component values, never an unbounded stack history.
-    private static final Slot[] previous = new Slot[11];
+    // Held/hotbar and four worn pieces retain a bounded set of immutable component values.
+    private static final Slot[] previous = new Slot[15];
 
     @SubscribeEvent public static void registerReload(RegisterClientReloadListenersEvent event) {
         event.registerReloadListener(new SimplePreparableReloadListener<Void>() {
@@ -56,6 +56,8 @@ public final class ClientAssetPrewarmer {
         visit(0,mc.player.getMainHandItem(),skin);
         visit(1,mc.player.getOffhandItem(),skin);
         for(int slot=0;slot<9;slot++) visit(slot+2,mc.player.getInventory().getItem(slot),skin);
+        int worn = 11;
+        for(var stack : mc.player.getArmorSlots()) visit(worn++,stack,skin);
         ModelCache.bakePending(RIGS_PER_TICK);
     }
 
@@ -71,8 +73,11 @@ public final class ClientAssetPrewarmer {
     }
 
     private static void warmStack(ItemStack stack,ResourceLocation skin,int depth) {
-        if(depth>8 || stack.isEmpty() || !(stack.getItem() instanceof ItemFlan item)) return;
-        InfoType type = item.type;
+        if(depth>8 || stack.isEmpty()) return;
+        InfoType type = InfoType.getType(stack);
+        if(type == null) return;
+        if(type instanceof com.flansmod.common.types.ArmourType armour)
+            ModelCache.prewarmArmour(armour,Textures.forArmour(armour));
         // Flat icon-only items do not need their unused legacy model parsed.
         if(type.rendersInHand()) ModelCache.prewarm(type);
         if(type instanceof GunType gun) {

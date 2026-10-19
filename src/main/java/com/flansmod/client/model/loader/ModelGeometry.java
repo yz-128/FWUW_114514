@@ -127,7 +127,7 @@ public final class ModelGeometry
 		/** The model class's own {@code textureX} / {@code textureY} fields. */
 		public int sheetX = 128, sheetY = 128;
 		public final Map<String, Part> parts = new LinkedHashMap<>();
-		/** True when the class called {@code flipAll()}. */
+		/** Whether the composed constructor transform flips Y and Z (an odd number of flipAll calls). */
 		public boolean flipped;
 
 		/**
@@ -260,8 +260,8 @@ public final class ModelGeometry
 		 *
 		 * <p>Accumulated rather than applied on the spot: a class may build its geometry in an
 		 * {@code initXxxModel()} method and call {@code translateAll} in another, so the call can
-		 * be scanned before the pivots it has to move exist. The net effect is a uniform shift, so
-		 * applying it once at the end is both simpler and order-independent.
+		 * be scanned before the pivots it has to move exist. The composed translation is applied
+		 * at the end; a subsequent flipAll must also flip the translation accumulated so far.
 		 */
 		public void translateAll(float x, float y, float z)
 		{
@@ -271,6 +271,14 @@ public final class ModelGeometry
 		}
 
 		public float translateAllX, translateAllY, translateAllZ;
+
+		/** Compose the original flip with previous translations; translation and flip do not commute. */
+		public void flipAll()
+		{
+			flipped = !flipped;
+			translateAllY = -translateAllY;
+			translateAllZ = -translateAllZ;
+		}
 
 		/** Gives a pivot entry to every renderer that has geometry but no explicit rotation point. */
 		public void ensurePivots()
@@ -291,18 +299,9 @@ public final class ModelGeometry
 			// on it, because translateAll moves all of them.
 			ensurePivots();
 
-			// Reproduces, in order, what the model class did at construction time:
-			//
-			//   flipAll()      — ModelGun.flip mirrors each part's geometry on Y and Z and
-			//                    negates the same two components of its rotation point. Note that
-			//                    negating two axes is a 180° turn about X, not a reflection:
-			//                    the winding is unchanged, and the parts merely face the other
-			//                    way, which is how the older packs were authored.
-			//   translateAll() — then shifts every rotation point by a fixed offset.
-			//
-			// Both mutate the rotation point before any frame is drawn, so they compose here
-			// rather than at render time. The reference converter did neither, which is why a
-			// straight comparison against it understates the offsets a pack applies.
+			// The constructor calls have already been composed into a flip and translation.
+			// Applying that final affine transform here retains their original order, including
+			// translate-then-flip and repeated flips. Mirroring Y and Z preserves winding.
 			for(float[] pivot : pivots.values())
 			{
 				if(flipped)

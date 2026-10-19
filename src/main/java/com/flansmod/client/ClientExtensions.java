@@ -39,6 +39,16 @@ public final class ClientExtensions
 			event.registerItem(new IClientItemExtensions()
 			{
 				@Override
+				public net.minecraft.client.model.Model getGenericArmorModel(
+						net.minecraft.world.entity.LivingEntity entity, net.minecraft.world.item.ItemStack stack,
+						net.minecraft.world.entity.EquipmentSlot slot, net.minecraft.client.model.HumanoidModel<?> original)
+				{
+					if(com.flansmod.common.types.InfoType.getType(stack) instanceof com.flansmod.common.types.ArmourType armour)
+						return com.flansmod.client.render.LegacyArmourModel.forItem(armour, original);
+					return original;
+				}
+
+				@Override
 				public net.minecraft.client.model.HumanoidModel.ArmPose getArmPose(
 						net.minecraft.world.entity.LivingEntity entity, net.minecraft.world.InteractionHand hand,
 						net.minecraft.world.item.ItemStack stack)

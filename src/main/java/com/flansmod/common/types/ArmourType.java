@@ -38,9 +38,9 @@ public class ArmourType extends InfoType
 	/** The material named on each proof line, e.g. {@code bodyarmor}. */
 	public final String[] proofMaterial = new String[5];
 	/** How many hit sounds each part has, and how far they carry. */
-	public final String[] hitSounds = new String[6];
-	public final int[] numHitSounds = new int[6];
-	public final float[] hitSoundRanges = new float[6];
+	public final String[] hitSounds = new String[8];
+	public final int[] numHitSounds = new int[8];
+	public final float[] hitSoundRanges = {8F, 8F, 8F, 8F, 8F, 8F, 8F, 8F};
 
 	/** How long the plates last, and the multipliers on wear from blunt and penetrating hits. */
 	public int durability = 0;
@@ -71,7 +71,7 @@ public class ArmourType extends InfoType
 			switch(split[0])
 			{
 				case "Type" -> type = slotId(split[1]);
-				case "Defence", "Defense", "DamageReduction" -> defence = toFloat(split[1]);
+				case "Defence", "Defense", "DamageReduction" -> defence = Double.parseDouble(split[1]);
 				case "ArmourTextureName", "ArmorTextureName", "ArmourTexture", "ArmorTexture" ->
 						armourTextureName = split[1];
 				case "MoveSpeedModifier", "Slowness" -> moveSpeedModifier = toFloat(split[1]);
@@ -161,11 +161,11 @@ public class ArmourType extends InfoType
 					hitSoundRanges[part] = toFloat(split[4]);
 					if(split.length > 5)
 					{
-						hitSounds[part + 1] = split[5];      // the penetrated variant
+						hitSounds[part + 4] = split[5];      // head/body/arms, then their penetrated variants
 						if(split.length > 6)
-							numHitSounds[part + 1] = toInt(split[6]);
+							numHitSounds[part + 4] = toInt(split[6]);
 						if(split.length > 7)
-							hitSoundRanges[part + 1] = toFloat(split[7]);
+							hitSoundRanges[part + 4] = toFloat(split[7]);
 					}
 				}
 			}
@@ -189,7 +189,7 @@ public class ArmourType extends InfoType
 			case "helmet", "head", "hat" -> 0;
 			case "chest", "body", "chestplate" -> 1;
 			case "legs", "pants", "leggings" -> 2;
-			case "boots", "feet" -> 3;
+			case "boots", "feet", "shoes" -> 3;
 			default -> {
 				try { yield Integer.parseInt(name); }
 				catch(NumberFormatException e) { yield 1; }

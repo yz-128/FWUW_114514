@@ -283,7 +283,8 @@ public final class BytecodeModel
 			{
 				if(fi.getOpcode() == Opcodes.GETFIELD)
 				{
-					if(fi.desc.endsWith("Vector3f;") && (List.of("muzzleFlashPoint","barrelOrigin","chamberSmokeOri","caseOrigin").contains(fi.name) || fi.name.startsWith("caseEject"))) {
+					if(fi.desc.endsWith("Vector3f;") && (List.of("muzzleFlashPoint","barrelOrigin","chamberSmokeOri","caseOrigin",
+							"pupilRefCenter","scopeGlassModelScale","scopeObjectiveLensCenter","normalVecOfDotBorder").contains(fi.name) || fi.name.startsWith("caseEject"))) {
 						effectVector=fi.name;consts.clear();continue;
 					}
 					if(arrays.contains(fi.name) || "[Lcom/flansmod/client/tmt/ModelRendererTurbo;".equals(fi.desc))
@@ -334,9 +335,8 @@ public final class BytecodeModel
 				else if("flipAll".equals(mi.name))
 				{
 					// flipAll is called on the model, not on a renderer, so it never reaches
-					// handle(). Each subclass's flipAll mirrors every part on Y and Z — which is
-					// a 180° turn about X, not a mirror — so the bake applies the same operation.
-					model.flipped = true;
+					// handle(). Compose it with earlier translations in the constructor's order.
+					model.flipAll();
 				}
 				else if("translateAll".equals(mi.name) && consts.size() >= 3)
 				{
@@ -473,7 +473,7 @@ public final class BytecodeModel
 				}
 				capturedCoords.clear();
 			}
-			case "flipAll" -> model.flipped = true;
+			case "flipAll" -> model.flipAll();
 			default -> { /* not geometry */ }
 		}
 	}
@@ -592,12 +592,16 @@ public final class BytecodeModel
 			case "gripIsOnPump" -> model.gripIsOnPump = value != 0F;
 			case "spinningCocking" -> model.spinningCocking = value != 0F;
 			case "fancyStance" -> model.fancyStance = value != 0F;
+			// The sight's reticle plate is scaled by this times the pupil distance. It is a
+			// plain field rather than a named setting, so it only lives in the scalar map that
+			// FmumActionPose reads; the renderer falls back to 0.4 when a model omits it.
+			case "reticleScale" -> { }
 			default -> { return false; }
 		}
 		return true;
 	}
 
-	/** Literal float arrays retain independent entries, rather than being mistaken for vectors. */
+	/** Includes writes into arrays allocated by the legacy superclass (notably reticleAt). */
 	private static void captureVectorArrays(Model model, MethodNode method)
 	{
 		if(method.instructions == null) return;
@@ -621,14 +625,63 @@ public final class BytecodeModel
 					var access=cursor.getPrevious()==null?null:cursor.getPrevious().getPrevious();
 					if(access instanceof FieldInsnNode field && field.getOpcode()==Opcodes.GETFIELD && constants.size()==3 && index!=null) {
 						float[][] values=model.fmumVectorArrays.get(field.name);
-						if(values!=null && index>=0 && index<values.length)
+						if(index>=0 && index<256) {
+							if(values==null) values=new float[index+1][3];
+							else if(index>=values.length) values=java.util.Arrays.copyOf(values,index+1);
 							values[index]=new float[]{constants.get(2),constants.get(1),constants.get(0)};
+							model.fmumVectorArrays.put(field.name,values);
+						}
 					}
 					break;
 				}
 				Object value=push(cursor);
 				if(value instanceof Number number) constants.add(number.floatValue());
 			}
+		}
+		captureArrayElementSetters(model,method);
+	}
+
+	/**
+	 * Captures {@code array[i].set(x,y,z)}, which is how most pack models write a reticle point.
+	 *
+	 * <p>Some classes allocate the array in a base class and then set an element in place — the CIC
+	 * N|D Optics ships {@code reticleAt[0].set(4096F, 0.028125F, 0F)} — instead of constructing a
+	 * new vector and storing it. Without this those sights have no aiming ray at all, so the
+	 * reticle can never find an aperture to land on.
+	 */
+	private static void captureArrayElementSetters(Model model,MethodNode method)
+	{
+		if(method.instructions==null) return;
+		for(AbstractInsnNode instruction : method.instructions) {
+			if(!(instruction instanceof MethodInsnNode call) || !"set".equals(call.name)
+					|| !call.owner.endsWith("Vector3f") || !"(FFF)V".equals(call.desc)) continue;
+			java.util.List<Float> constants=new java.util.ArrayList<>();
+			// Collect the three float args immediately before the call, in stack order.
+			AbstractInsnNode cursor=call.getPrevious();
+			for(int guard=0;cursor!=null && guard++<12;cursor=cursor.getPrevious()) {
+				Object value=push(cursor);
+				if(value instanceof Number number) constants.add(number.floatValue());
+			}
+			if(constants.size()<3) continue;
+			int index=-1;
+			String arrayName=null;
+			for(AbstractInsnNode node=call.getPrevious();node!=null;node=node.getPrevious()) {
+				if(node.getOpcode()==Opcodes.AALOAD) {
+					Integer value=intOf(node.getPrevious());
+					var access=node.getPrevious()==null?null:node.getPrevious().getPrevious();
+					if(access instanceof FieldInsnNode field && field.getOpcode()==Opcodes.GETFIELD) {
+						index=value==null?-1:value;
+						arrayName=field.name;
+					}
+					break;
+				}
+			}
+			if(arrayName==null || index<0 || index>=256) continue;
+			float[][] values=model.fmumVectorArrays.get(arrayName);
+			if(values==null) values=new float[index+1][3];
+			else if(index>=values.length) values=java.util.Arrays.copyOf(values,index+1);
+			values[index]=new float[]{constants.get(2),constants.get(1),constants.get(0)};
+			model.fmumVectorArrays.put(arrayName,values);
 		}
 	}
 
