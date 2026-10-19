@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.model.dev",
+  "updated_at": "2026-10-19T14:24:22.145Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "先断言管线正确，再核对姿态，最后出图。",
+    "en": "Assert the pipeline, verify poses, then produce images."
+  },
+  "order": [
+    "flansmod.model.dev.bake-test",
+    "flansmod.model.dev.pose-check",
+    "flansmod.model.dev.preview"
+  ]
+}

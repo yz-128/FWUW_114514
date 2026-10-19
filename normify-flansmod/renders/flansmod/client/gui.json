@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.client.gui",
+  "updated_at": "2026-10-19T14:24:23.163Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "界面主体调用预览，预览使用取景。",
+    "en": "The screen calls the preview, which uses the framing."
+  },
+  "order": [
+    "flansmod.client.gui.screen",
+    "flansmod.client.gui.preview",
+    "flansmod.client.gui.view"
+  ]
+}

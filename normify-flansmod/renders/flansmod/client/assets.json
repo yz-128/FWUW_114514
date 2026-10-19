@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.client.assets",
+  "updated_at": "2026-10-19T14:24:23.090Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "预热与接口接线是两件事。",
+    "en": "Warming and interface wiring are separate concerns."
+  },
+  "order": [
+    "flansmod.client.assets.prewarm",
+    "flansmod.client.assets.extensions"
+  ]
+}

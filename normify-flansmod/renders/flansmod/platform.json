@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.platform",
+  "updated_at": "2026-10-19T14:24:20.810Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "入口先注册物品，再由资源生成补齐图标；会话状态与网络在运行期持续工作。",
+    "en": "The entry point registers items first, generated assets fill in icons, then session state and networking run continuously."
+  },
+  "order": [
+    "flansmod.platform.mod",
+    "flansmod.platform.registry",
+    "flansmod.platform.assets",
+    "flansmod.platform.session",
+    "flansmod.platform.network",
+    "flansmod.platform.sound",
+    "flansmod.platform.debug"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.render.item",
+  "updated_at": "2026-10-19T14:24:22.280Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "按一帧内的顺序：先建变换，再画枪体与可动件，然后配件、弹匣，换弹姿态叠加，手臂最后。",
+    "en": "In-frame order: build the transform, draw the body and moving parts, then attachments and magazine, layer the reload pose, and draw arms last."
+  },
+  "order": [
+    "flansmod.render.item.entry",
+    "flansmod.render.item.frame",
+    "flansmod.render.item.parts",
+    "flansmod.render.item.attachments",
+    "flansmod.render.item.magazine",
+    "flansmod.render.item.reload",
+    "flansmod.render.item.arms"
+  ]
+}

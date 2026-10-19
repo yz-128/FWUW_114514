@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.client.input",
+  "updated_at": "2026-10-19T14:24:22.884Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "三组功能键，一个抑制器。",
+    "en": "Three feature key groups and one suppressor."
+  },
+  "order": [
+    "flansmod.client.input.reload",
+    "flansmod.client.input.sight",
+    "flansmod.client.input.modify",
+    "flansmod.client.input.suppress"
+  ]
+}

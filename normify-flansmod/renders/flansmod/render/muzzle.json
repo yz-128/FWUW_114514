@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.render.muzzle",
+  "updated_at": "2026-10-19T14:24:22.413Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "先定位，再合成特效，最后叠加辉光与补光。",
+    "en": "Locate, compose the effect, then add glow and lighting."
+  },
+  "order": [
+    "flansmod.render.muzzle.pose",
+    "flansmod.render.muzzle.effects",
+    "flansmod.render.muzzle.glow",
+    "flansmod.render.muzzle.light"
+  ]
+}

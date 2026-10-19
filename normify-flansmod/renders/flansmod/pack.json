@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.pack",
+  "updated_at": "2026-10-19T14:24:20.958Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "先发现包，再确定布局，然后才能读资源；文本与语言解析依赖资源读取。",
+    "en": "Discover packs, resolve their layout, then read resources; text and language parsing build on resource access."
+  },
+  "order": [
+    "flansmod.pack.discovery",
+    "flansmod.pack.layout",
+    "flansmod.pack.resources",
+    "flansmod.pack.core",
+    "flansmod.pack.decoding",
+    "flansmod.pack.lang",
+    "flansmod.pack.soundjson"
+  ]
+}

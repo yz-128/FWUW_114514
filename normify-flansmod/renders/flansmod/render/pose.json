@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.render.pose",
+  "updated_at": "2026-10-19T14:24:22.350Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "整枪姿态先算，手臂与动作姿态在其结果之上。",
+    "en": "The whole-gun pose is computed first and arm and action poses build on it."
+  },
+  "order": [
+    "flansmod.render.pose.first-person",
+    "flansmod.render.pose.action",
+    "flansmod.render.pose.arms",
+    "flansmod.render.pose.reload",
+    "flansmod.render.pose.motion"
+  ]
+}

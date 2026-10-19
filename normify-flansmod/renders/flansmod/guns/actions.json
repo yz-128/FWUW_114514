@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.guns.actions",
+  "updated_at": "2026-10-19T14:24:21.858Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "两组独立动作，共用同一个动作时钟。",
+    "en": "Two independent action groups sharing one action clock."
+  },
+  "order": [
+    "flansmod.guns.actions.inspect",
+    "flansmod.guns.actions.rest"
+  ]
+}

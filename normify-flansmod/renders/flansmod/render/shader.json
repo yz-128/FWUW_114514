@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.render.shader",
+  "updated_at": "2026-10-19T14:24:22.482Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "光影下的两条独立通道。",
+    "en": "Two independent passes under a shader pack."
+  },
+  "order": [
+    "flansmod.render.shader.muzzle",
+    "flansmod.render.shader.smoke"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.defs.base",
+  "updated_at": "2026-10-19T14:25:15.753Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "定义文件先被读入，再由读取器逐行解析。",
+    "en": "The definition file is loaded, then the reader parses it line by line."
+  },
+  "order": [
+    "flansmod.defs.base.reader",
+    "flansmod.defs.base.typefile"
+  ]
+}

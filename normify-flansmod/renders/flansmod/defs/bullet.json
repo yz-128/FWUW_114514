@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.defs.bullet",
+  "updated_at": "2026-10-19T14:24:21.441Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "先解析定义，再把效果名解析成注册表持有者。",
+    "en": "Parse the definition, then resolve effect names into registry holders."
+  },
+  "order": [
+    "flansmod.defs.bullet.parser",
+    "flansmod.defs.bullet.effects"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.ballistics.entity",
+  "updated_at": "2026-10-19T14:25:15.667Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "飞行先推进位置，命中再结算伤害。",
+    "en": "Flight advances the position, then impact resolves damage."
+  },
+  "order": [
+    "flansmod.ballistics.entity.flight",
+    "flansmod.ballistics.entity.impact"
+  ]
+}

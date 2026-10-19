@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.model.bytecode",
+  "updated_at": "2026-10-19T14:24:22.073Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "先读类结构，再解释调用与常量，数组与光学字段是两类特殊捕获。",
+    "en": "Read the class, interpret calls and constants, then handle arrays and optical fields as two special captures."
+  },
+  "order": [
+    "flansmod.model.bytecode.class",
+    "flansmod.model.bytecode.primitives",
+    "flansmod.model.bytecode.arrays",
+    "flansmod.model.bytecode.optical"
+  ]
+}

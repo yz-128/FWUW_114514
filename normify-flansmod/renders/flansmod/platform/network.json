@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.platform.network",
+  "updated_at": "2026-10-19T14:24:20.886Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "按玩法频率排序：射击最频繁，改装最少。",
+    "en": "Ordered by gameplay frequency: firing is constant, armour sync is rare."
+  },
+  "order": [
+    "flansmod.platform.network.gun",
+    "flansmod.platform.network.reload",
+    "flansmod.platform.network.sight",
+    "flansmod.platform.network.mod",
+    "flansmod.platform.network.armour"
+  ]
+}

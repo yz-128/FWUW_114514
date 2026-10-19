@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.client.animation",
+  "updated_at": "2026-10-19T14:24:22.954Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "驱动每 tick 调用后三者。",
+    "en": "The driver calls the other three every tick."
+  },
+  "order": [
+    "flansmod.client.animation.driver",
+    "flansmod.client.animation.registry",
+    "flansmod.client.animation.aim",
+    "flansmod.client.animation.sprint"
+  ]
+}

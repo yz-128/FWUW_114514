@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.guns.firing",
+  "updated_at": "2026-10-19T14:24:21.576Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "扳机状态决定何时调用射击，模式决定一次调用发几发。",
+    "en": "Trigger state decides when the shot runs; the mode decides how many rounds one call produces."
+  },
+  "order": [
+    "flansmod.guns.firing.trigger",
+    "flansmod.guns.firing.shot",
+    "flansmod.guns.firing.mode"
+  ]
+}

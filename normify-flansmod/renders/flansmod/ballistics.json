@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.ballistics",
+  "updated_at": "2026-10-19T14:24:21.927Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "实体推进依赖方块遍历，软质方块是遍历结果的特殊处理。",
+    "en": "The entity advances through block traversal, and soft blocks are a special case of the traversal result."
+  },
+  "order": [
+    "flansmod.ballistics.entity",
+    "flansmod.ballistics.trace",
+    "flansmod.ballistics.soft"
+  ]
+}

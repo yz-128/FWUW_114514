@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.optics.fold",
+  "updated_at": "2026-10-19T14:24:22.681Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "几何决定绕哪转，时序给进度，姿态与渲染消费它。",
+    "en": "Geometry decides the axis, timing supplies progress, and pose and rendering consume it."
+  },
+  "order": [
+    "flansmod.optics.fold.geometry",
+    "flansmod.optics.fold.pose",
+    "flansmod.optics.fold.animation",
+    "flansmod.optics.fold.render"
+  ]
+}

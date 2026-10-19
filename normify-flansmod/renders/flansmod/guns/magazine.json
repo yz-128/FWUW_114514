@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.guns.magazine",
+  "updated_at": "2026-10-19T14:24:21.643Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "存储是基础，数量与口径判定在其上，装填最后发生。",
+    "en": "Storage is the base, counts and calibre checks build on it, and loading happens last."
+  },
+  "order": [
+    "flansmod.guns.magazine.storage",
+    "flansmod.guns.magazine.ammo",
+    "flansmod.guns.magazine.match",
+    "flansmod.guns.magazine.reload"
+  ]
+}

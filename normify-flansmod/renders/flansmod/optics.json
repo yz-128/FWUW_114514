@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.optics",
+  "updated_at": "2026-10-19T14:24:22.613Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "倍率先作用于世界，镜片取样，准星合成，折叠改变几何。",
+    "en": "Magnification acts on the world, the lens samples it, reticles composite, and folding changes geometry."
+  },
+  "order": [
+    "flansmod.optics.magnification",
+    "flansmod.optics.lens",
+    "flansmod.optics.reticle",
+    "flansmod.optics.sight",
+    "flansmod.optics.picture",
+    "flansmod.optics.pose",
+    "flansmod.optics.fold"
+  ]
+}

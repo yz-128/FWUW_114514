@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.defs.gun",
+  "updated_at": "2026-10-19T14:24:21.235Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "字段先声明，解析器填充，发射模式与烟雾是解析产物的两组行为。",
+    "en": "Fields are declared first, the parser fills them, and fire modes and smoke are two behaviours over the result."
+  },
+  "order": [
+    "flansmod.defs.gun.fields",
+    "flansmod.defs.gun.parser",
+    "flansmod.defs.gun.modes",
+    "flansmod.defs.gun.smoke"
+  ]
+}

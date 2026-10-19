@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.client.hud",
+  "updated_at": "2026-10-19T14:24:23.021Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "常驻 HUD 与按需提示。",
+    "en": "Always-on HUD versus on-demand tooltips."
+  },
+  "order": [
+    "flansmod.client.hud.gun",
+    "flansmod.client.hud.details"
+  ]
+}

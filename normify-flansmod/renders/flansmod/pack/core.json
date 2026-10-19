@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.pack.core",
+  "updated_at": "2026-10-19T14:24:21.100Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "索引产出条目，条目被缓存层按需读取。",
+    "en": "The index yields entries, and the cache reads them on demand."
+  },
+  "order": [
+    "flansmod.pack.core.packindex",
+    "flansmod.pack.core.entry",
+    "flansmod.pack.core.cache"
+  ]
+}

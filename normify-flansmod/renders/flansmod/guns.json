@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.guns",
+  "updated_at": "2026-10-19T14:24:21.508Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "开火触发供弹与换弹，改装与瞄具改变数值与表现，动作与输入是外围控制。",
+    "en": "Firing drives feeding and reloads; modification and sights change stats and presentation; actions and input are peripheral control."
+  },
+  "order": [
+    "flansmod.guns.firing",
+    "flansmod.guns.magazine",
+    "flansmod.guns.reloading",
+    "flansmod.guns.attachments",
+    "flansmod.guns.sights",
+    "flansmod.guns.actions",
+    "flansmod.guns.stats",
+    "flansmod.guns.casings",
+    "flansmod.guns.input"
+  ]
+}

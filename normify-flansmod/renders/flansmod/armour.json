@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.armour",
+  "updated_at": "2026-10-19T14:24:22.749Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "物品与状态是数据，减伤与弹道是规则，资源与界面是表现。",
+    "en": "Item and state are data, reduction and ballistics are rules, resources and HUD are presentation."
+  },
+  "order": [
+    "flansmod.armour.item",
+    "flansmod.armour.state",
+    "flansmod.armour.protection",
+    "flansmod.armour.ballistics",
+    "flansmod.armour.sounds",
+    "flansmod.armour.resources",
+    "flansmod.armour.hud",
+    "flansmod.armour.controls"
+  ]
+}

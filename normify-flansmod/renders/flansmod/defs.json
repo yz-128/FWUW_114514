@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.defs",
+  "updated_at": "2026-10-19T14:24:21.168Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "基座被所有定义继承；可改装基类被枪与配件复用。",
+    "en": "The base is inherited by every definition; the modifiable base is reused by guns and attachments."
+  },
+  "order": [
+    "flansmod.defs.base",
+    "flansmod.defs.item",
+    "flansmod.defs.gun",
+    "flansmod.defs.attachment",
+    "flansmod.defs.modifiable",
+    "flansmod.defs.bullet",
+    "flansmod.defs.armour",
+    "flansmod.defs.misc",
+    "flansmod.defs.vehicle"
+  ]
+}

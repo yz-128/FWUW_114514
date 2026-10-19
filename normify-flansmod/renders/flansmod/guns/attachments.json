@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.guns.attachments",
+  "updated_at": "2026-10-19T14:24:21.785Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "视图是只读表示，目录用于展示，事务负责写入。",
+    "en": "The view is the read model, the catalogue is for display, and the transaction writes."
+  },
+  "order": [
+    "flansmod.guns.attachments.view",
+    "flansmod.guns.attachments.catalog",
+    "flansmod.guns.attachments.transaction"
+  ]
+}

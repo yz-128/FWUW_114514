@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.defs.modifiable",
+  "updated_at": "2026-10-19T14:24:21.374Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "槽位定义再被默认装配树引用；命中箱独立存在。",
+    "en": "Slots are referenced by the default attachment tree; hit boxes stand alone."
+  },
+  "order": [
+    "flansmod.defs.modifiable.slots",
+    "flansmod.defs.modifiable.defaults",
+    "flansmod.defs.modifiable.hitbox"
+  ]
+}

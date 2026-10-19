@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.defs.attachment",
+  "updated_at": "2026-10-19T14:24:21.304Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "解析得到原始值，再换算成倍率与折叠/联动语义。",
+    "en": "Parsing yields raw values, which are then converted into magnification and fold/co-sight semantics."
+  },
+  "order": [
+    "flansmod.defs.attachment.parser",
+    "flansmod.defs.attachment.zoom",
+    "flansmod.defs.attachment.variants"
+  ]
+}

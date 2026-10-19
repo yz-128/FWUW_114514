@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.guns.reloading",
+  "updated_at": "2026-10-19T14:24:21.713Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "阶段驱动推进进度，帧对象把进度交给渲染。",
+    "en": "The phase driver advances progress and the frame object hands it to rendering."
+  },
+  "order": [
+    "flansmod.guns.reloading.pipeline",
+    "flansmod.guns.reloading.state"
+  ]
+}

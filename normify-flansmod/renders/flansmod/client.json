@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.client",
+  "updated_at": "2026-10-19T14:24:22.813Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "输入驱动动画，动画驱动渲染；资源预热在进入世界前完成。",
+    "en": "Input drives animation, animation drives rendering; asset warming happens before entering the world."
+  },
+  "order": [
+    "flansmod.client.input",
+    "flansmod.client.animation",
+    "flansmod.client.assets",
+    "flansmod.client.hud",
+    "flansmod.client.gui",
+    "flansmod.client.debug"
+  ]
+}

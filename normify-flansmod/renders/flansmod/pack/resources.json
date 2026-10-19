@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.pack.resources",
+  "updated_at": "2026-10-19T14:24:21.029Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "三种来源形态：统一索引接口，以及目录与压缩包两种后端。",
+    "en": "One indexed interface with folder and archive backends."
+  },
+  "order": [
+    "flansmod.pack.resources.indexed",
+    "flansmod.pack.resources.folder",
+    "flansmod.pack.resources.zip"
+  ]
+}

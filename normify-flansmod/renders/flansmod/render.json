@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.render",
+  "updated_at": "2026-10-19T14:24:22.213Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "物品渲染调用姿态与图元提交，特效按是否光影分流。",
+    "en": "Item rendering calls poses and rig submission; effects split by shader presence."
+  },
+  "order": [
+    "flansmod.render.item",
+    "flansmod.render.rig",
+    "flansmod.render.pose",
+    "flansmod.render.muzzle",
+    "flansmod.render.shader",
+    "flansmod.render.effects",
+    "flansmod.render.entity",
+    "flansmod.render.armour",
+    "flansmod.render.textures"
+  ]
+}

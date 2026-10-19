@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.render.effects",
+  "updated_at": "2026-10-19T14:24:22.546Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "射击产生特效，烟雾是其中一类，世界坐标是最终用途。",
+    "en": "A shot produces effects, smoke is one kind, and world space is the final use."
+  },
+  "order": [
+    "flansmod.render.effects.shot",
+    "flansmod.render.effects.smoke",
+    "flansmod.render.effects.world"
+  ]
+}

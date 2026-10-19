@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "flansmod",
+  "updated_at": "2026-10-19T14:24:20.739Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "从左到右是运行时的依赖方向：平台挂载一切，包与定义提供数据，枪械与弹道是玩法，模型/渲染/光学是表现，护甲与客户端界面在各层之上。",
+    "en": "Left to right follows the runtime dependency direction: the platform mounts everything, packs and definitions supply data, guns and ballistics are gameplay, models/rendering/optics are presentation, armour and the client UI sit on top."
+  },
+  "order": [
+    "flansmod.platform",
+    "flansmod.pack",
+    "flansmod.defs",
+    "flansmod.guns",
+    "flansmod.ballistics",
+    "flansmod.model",
+    "flansmod.render",
+    "flansmod.optics",
+    "flansmod.armour",
+    "flansmod.client"
+  ]
+}

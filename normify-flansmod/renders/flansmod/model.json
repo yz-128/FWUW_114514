@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "flansmod.model",
+  "updated_at": "2026-10-19T14:24:22.000Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "字节码还原几何，几何烘焙成 rig，缓存提供复用，贴图尺寸修正 UV。",
+    "en": "Bytecode recovers geometry, baking turns it into a rig, the cache reuses it and texture sizes correct UVs."
+  },
+  "order": [
+    "flansmod.model.bytecode",
+    "flansmod.model.geometry",
+    "flansmod.model.bake",
+    "flansmod.model.cache",
+    "flansmod.model.texture",
+    "flansmod.model.armour",
+    "flansmod.model.dev"
+  ]
+}
