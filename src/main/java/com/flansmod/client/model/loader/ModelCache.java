@@ -334,18 +334,22 @@ public final class ModelCache
 
     /** Class presence only: JSON routing and startup diagnostics do not parse the whole pack. */
     public static boolean hasReference(String reference) {
-        if(!usable(reference)) return false;
+        return usable(reference) && (STOCK_BULLET_CLASS.equals(classNameFor(reference)) || sourcePack(reference).isPresent());
+    }
+
+    /** The same ordered class lookup used by the geometry reader, without parsing a class. */
+    public static Optional<IndexedPack> sourcePack(String reference) {
+        if(!usable(reference)) return Optional.empty();
         String path = classNameFor(reference);
-        if(path == null) return false;
-        if(path.equals(STOCK_BULLET_CLASS)) return true;
+        if(path == null) return Optional.empty();
         for(var pack : ContentPackIndex.current().packs()) {
-            if(classEntry(pack,path).isPresent()) return true;
+            if(classEntry(pack,path).isPresent()) return Optional.of(pack);
             if(reference.substring(reference.lastIndexOf('.')+1).startsWith("Model")) {
                 int slash = path.lastIndexOf('/')+1;
-                if(classEntry(pack,path.substring(0,slash)+"Model"+path.substring(slash)).isPresent()) return true;
+                if(classEntry(pack,path.substring(0,slash)+"Model"+path.substring(slash)).isPresent()) return Optional.of(pack);
             }
         }
-        return false;
+        return Optional.empty();
     }
 
     private static Optional<PackEntry> classEntry(IndexedPack pack,String path) {

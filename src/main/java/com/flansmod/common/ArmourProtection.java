@@ -26,6 +26,27 @@ public final class ArmourProtection
 	{
 		if(event.getEntity().level().isClientSide() || event.getSource().is(DamageTypeTags.BYPASSES_ARMOR))
 			return;
+		if(event.getSource().getDirectEntity() instanceof com.flansmod.common.entity.EntityBullet bullet
+				&&bullet.armourHit()!=null&&bullet.bulletType()!=null) {
+			var living=event.getEntity();boolean player=living instanceof net.minecraft.world.entity.player.Player;
+			int part=player?ArmourBallistics.part(bullet.armourHit().subtract(living.position()),living.yBodyRot,living.getEyeHeight(),living.getBbWidth()):1;
+			float amount=event.getAmount()*(player?(part==0?2F:part>1?.6F:1F):1F);
+			var worn=new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
+			for(var slot:new EquipmentSlot[]{EquipmentSlot.FEET,EquipmentSlot.LEGS,EquipmentSlot.CHEST,EquipmentSlot.HEAD}) {
+				var stack=living.getItemBySlot(slot);
+				if(stack.getItem() instanceof ItemFlanArmour item&&item.getEquipmentSlot()==slot)worn.add(stack);
+			}
+			var result=ArmourBallistics.resolve(worn,bullet.bulletType(),part,amount,player,()->living.getRandom().nextFloat());
+			for(var impact:result.impacts()) {
+				ArmourBallistics.applyWear(impact);
+				var type=((ItemFlanArmour)impact.stack().getItem()).armour;int sound=impact.soundPart();
+				if(type.numHitSounds[sound]>0) {
+                    var eventSound=FmumSounds.event(ArmourSounds.hit(type,sound,living.getRandom().nextInt(type.numHitSounds[sound])),type.hitSoundRanges[sound]);
+					if(eventSound!=null)living.level().playSound(null,living.getX(),living.getY(),living.getZ(),eventSound,net.minecraft.sounds.SoundSource.PLAYERS,10F,1F);
+				}
+			}
+			if(result.stopped())bullet.stopAtArmour();event.setAmount(result.damage());return;
+		}
 		double defence = 0D;
 		for(EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST,
 				EquipmentSlot.LEGS, EquipmentSlot.FEET})
@@ -43,6 +64,12 @@ public final class ArmourProtection
 		// fraction now so a piece that breaks on this hit still protects against this hit.
 		event.addReductionModifier(DamageContainer.Reduction.ARMOR,
 				(container, vanillaReduction) -> reduction(container.getNewDamage(), vanillaReduction, fraction));
+	}
+
+	@SubscribeEvent public static void armourWear(net.neoforged.neoforge.event.entity.living.ArmorHurtEvent event) {
+		boolean plate=event.getDamageSource().getDirectEntity() instanceof com.flansmod.common.entity.EntityBullet bullet&&bullet.armourHit()!=null;
+		for(var entry:event.getArmorMap().entrySet())if(entry.getValue().armorItemStack.getItem() instanceof ItemFlanArmour item
+				&&(plate||!item.armour.breakable))event.setNewDamage(entry.getKey(),0F);
 	}
 
 	/** Combined reduction, preserving other armour's existing reduction and preventing healing. */

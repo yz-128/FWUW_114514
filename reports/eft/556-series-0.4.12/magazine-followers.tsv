@@ -1,0 +1,6 @@
+Magazine	DeclaredModel	DeclaredScale	ParsedTexture	ModelFound	ReferenceSkinFound	FollowerPositions	FollowerRotations
+OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	OCRemakeMagazinesBullets.556x45mm20RoundMagazineFollower	0.1	null	true	true	9	0
+OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	OCRemakeMagazinesBullets.556x45mm30RoundMagazineFollower	0.1	null	true	true	9	0
+OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	OCRemakeMagazinesBullets.556x45mm30RoundMagazineFollower	0.1	null	true	true	9	0
+OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	OCRemakeMagazinesBullets.556x45mm30RoundMagazineFollower	0.1	null	true	true	9	0
+OctagonWeaponsReforged_1.33/XProductsX15556x45mm50RoundDrum	OCRemakeMagazinesBullets.XProductsX15556x45mm50RoundDrumFollower	0.1	null	true	true	4	0

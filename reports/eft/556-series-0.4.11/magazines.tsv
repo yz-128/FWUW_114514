@@ -1,0 +1,11 @@
+Magazine	Registered	Capacity	MagTypes	DeclaredAmmo	ParsedAmmo	MissingTokens
+EscapeFromTarcraftReforged_1.5.3/STANAG_556x45_30Rounds	true	30	[AR556Magazine]	[556x45]	[556x45]	[]
+EscapeFromTarcraftReforged_1.5.3/MAG5_60Rounds	true	60	[AR556Magazine]	[556x45]	[556x45]	[]
+EscapeFromTarcraftReforged_1.5.3/TESTmag	true	100	[TESTMag]	[46x30, 556x45, 57x28, 58x42, 545x39, 762x39, 762x51, 762x54, 9x19, 9x39, 127x55, 12G, 45ACP, 338]	[46x30, 556x45, 57x28, 58x42, 545x39, 762x39, 762x51, 762x54, 9x19, 9x39, 127x55, 12G, 45ACP, 338]	[]
+OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	true	20	[556x45mmmag]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[]
+OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	true	30	[556x45mmmag]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[]
+OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	true	30	[556x45mmmag]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[]
+OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	true	99999	[556x45mmmag]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[]
+OctagonWeaponsReforged_1.33/XProductsX15556x45mm50RoundDrum	true	50	[556x45mmsmag]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[556x45mm, 556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]	[]
+[FMUM]EscapeFromTarCraft-Guns/STANAG_556x45_30Rounds	false	30	[AR556Magazine]	[556x45]	[556x45]	[]
+[FMUM]EscapeFromTarCraft-Guns/MAG5_60Rounds	false	60	[AR556Magazine]	[556x45]	[556x45]	[]

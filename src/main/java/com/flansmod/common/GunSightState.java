@@ -139,7 +139,7 @@ public final class GunSightState {
             // Validate the whole transition before touching any copied node; preserve every child and component.
             for(var sight:targets) {
                 var shadow=AttachmentType.getAttachment(sight.type.shadowType);
-                if(shadow==null || shadow.item==null)return false;
+                if(shadow==null || shadow.item==null || !sight.type.isShadowTransitionTo(shadow))return false;
                 for(var child:sight.node.children)if(child.slot<0 || child.slot>=shadow.slots.length)return false;
             }
             for(var sight:targets) {

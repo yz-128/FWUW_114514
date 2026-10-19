@@ -81,10 +81,11 @@ public final class ClientAssetPrewarmer {
         // Flat icon-only items do not need their unused legacy model parsed.
         if(type.rendersInHand()) ModelCache.prewarm(type);
         if(type instanceof GunType gun) {
-            for(var group:gun.defaultAttachments) attachments(gun,group,0);
+            var view=com.flansmod.common.GunAttachments.view(gun,stack);
+            for(var group:view.defaultAttachments) attachments(view,group,0);
             arm(gun.leftArmModel,gun.leftArmTexture,skin);
             arm(gun.rightArmModel,gun.rightArmTexture,skin);
-            reference(gun.magFollowerModel,1F,gun.magFollowerTexture,true);
+            ModelCache.prewarmReference(gun.magFollowerModel,gun.magFollowerScale,Textures.forMagazineFollower(gun),true);
             flash(gun.flashModel,gun.flashTexture,gun.numFlashTexture);
             smoke(gun.muzzleSmoke); smoke(gun.chamberSmoke);
         }
@@ -108,6 +109,10 @@ public final class ClientAssetPrewarmer {
             var type = AttachmentType.getAttachment(node.name);
             if(type == null) continue;
             ModelCache.prewarm(type);
+            if("sight".equalsIgnoreCase(type.itsType)) {
+                ModelCache.prewarmReference(type.scopeGlassModel,1F,null,true);
+                ModelCache.prewarmReference(type.lightStuffModel,1F,Textures.forReticle(type,node.dotFrame),true);
+            }
             String texture = type.flashTextureName == null ? gun.flashTexture : type.flashTextureName;
             int variants = type.numFlashTexture>0 ? type.numFlashTexture : gun.numFlashTexture;
             flash(type.flashModelName,texture,variants);

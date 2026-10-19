@@ -78,15 +78,18 @@ public class InfoType
 			if(line.trim().startsWith("//"))
 				continue;
 
-			// The recipe grid is not one line: 1.7.10 read the three rows that FOLLOW a
-			// {@code Recipe} / {@code ShapelessRecipe} line as the row data, and packs still write
-			// them that way. They are indented, and often a row is a single letter with trailing
-			// spaces, so they cannot be recognised by the ordinary key/value path — the key has to
-			// be seen first and the rows consumed here.
+			// Only a shaped Recipe consumes three following rows. ShapelessRecipe contains its
+			// ingredients on the header itself; consuming rows there loses later item settings.
 			String[] split = splitConfigLine(line);
 			if(split.length == 0)
 				continue;
-			if(split[0].equalsIgnoreCase("Recipe") || split[0].equalsIgnoreCase("ShapelessRecipe"))
+			if(split[0].equalsIgnoreCase("ShapelessRecipe"))
+			{
+				recipeLine = split;
+				shapeless = true;
+				continue;
+			}
+			if(split[0].equalsIgnoreCase("Recipe"))
 			{
 				readRecipeGrid(file, split);
 				continue;
@@ -127,7 +130,7 @@ public class InfoType
 				recipeGrid[row][col] = trimmed.charAt(col);
 		}
 		recipeLine = header;
-		shapeless = header[0].equalsIgnoreCase("ShapelessRecipe");
+		shapeless = false;
 	}
 
 	/**

@@ -1,0 +1,14 @@
+{
+  "definitions": 118,
+  "registered": 99,
+  "duplicateDefinitions": 19,
+  "faces": 88914,
+  "maskDefinitions": 3,
+  "findingRows": 17,
+  "packs": {
+    "EscapeFromTarcraftReforged_1.5.3": 23,
+    "OctagonWeaponsReforged_1.33": 15,
+    "[FMUM]EscapeFromTarCraft-Armor": 53,
+    "[FMUM]EscapeFromTarCraft-Armor(Scav)": 27
+  }
+}

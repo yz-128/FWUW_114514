@@ -20,8 +20,8 @@ public class AttachmentType extends ModifiableType
 	public String attachmentType = "generic";
 
 	/**
-	 * What this part is, in FMUM's vocabulary — the value matching a slot's whitelist uses this
-	 * rather than {@link #attachmentType}, which is the older and coarser tag.
+	 * Behaviour such as sight, barrel or grip. Slot type-whitelists match attachmentType;
+	 * this separate tag selects rendering and whole-gun functional constraints.
 	 */
 	public String itsType = "";
 
@@ -60,11 +60,32 @@ public class AttachmentType extends ModifiableType
 	public String shadowMode = "none";
 	public boolean isCoSight() { return "cosight".equals(shadowMode); }
 	public boolean isToggle() { return "toggle".equals(shadowMode); }
+	/** A declared directed edge in a bounded shadow cycle (including three-state apertures). */
+	public boolean isShadowTransitionTo(AttachmentType target) {
+		if(target==null || target==this || !shadowType.equalsIgnoreCase(target.shortName)
+				|| (!isCoSight() && !isToggle()) || !shadowMode.equals(target.shadowMode))return false;
+		var visited=new java.util.HashSet<AttachmentType>();
+		for(var next=target;next!=null && visited.size()<16 && visited.add(next);next=getAttachment(next.shadowType)) {
+			if(next==this)return true;
+			if(!shadowMode.equals(next.shadowMode))break;
+		}
+		return false;
+	}
 	/** EFT marks the hidden half of a reciprocal folding pair as its folded variant. */
 	public boolean isFoldedVariant() {
 		if(!hideInCreativeTab || (!isCoSight() && !isToggle())) return false;
 		var other = getAttachment(shadowType);
-		return other != null && !other.hideInCreativeTab && other.shadowType.equalsIgnoreCase(shortName);
+		if(other != null && !other.hideInCreativeTab && other.shadowType.equalsIgnoreCase(shortName))return true;
+		// Octagon's rear sight has TWO deployed apertures followed by a generic folded state.
+		// Hidden creative variants alone cannot distinguish its second aperture from folding.
+		if("sight".equalsIgnoreCase(itsType))return false;
+		var visited=new java.util.HashSet<AttachmentType>();
+		while(other!=null && visited.add(other) && visited.size()<=16) {
+			if(other==this)return visited.stream().anyMatch(t->"sight".equalsIgnoreCase(t.itsType));
+			if(!other.isCoSight() && !other.isToggle())break;
+			other=getAttachment(other.shadowType);
+		}
+		return false;
 	}
 
 	/** Secondary-fire behaviour: this part can fire, and with what. */

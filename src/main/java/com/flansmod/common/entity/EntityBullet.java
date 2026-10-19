@@ -80,6 +80,10 @@ public class EntityBullet extends Projectile
 
 	/** Set once the round has spent its penetration and should stop on the next tick. */
 	private boolean detonated;
+	private Vec3 armourHit;
+	private boolean stoppedByArmour;
+	public Vec3 armourHit(){return armourHit;}
+	public void stopAtArmour(){stoppedByArmour=true;}
 
 	public EntityBullet(EntityType<? extends EntityBullet> entityType, Level level)
 	{
@@ -298,11 +302,13 @@ public class EntityBullet extends Projectile
 		// The round's damage is the gun's Damage multiplied by the bullet definition's
 		// DamageVsLiving — 1.7.10 wrote "damage * type.damageVsLiving" here, and the split is what
 		// lets one gun fire a weak practice round and a strong live one with the same Damage value.
-		float hitDamage = damage * (type == null ? 1F : type.damageVsLiving);
-		if(owner instanceof LivingEntity livingOwner)
-			target.hurt(damageSources().mobProjectile(this, livingOwner), hitDamage);
-		else
-			target.hurt(damageSources().thrown(this, owner), hitDamage);
+		float hitDamage = damage * (type == null ? 1F : target instanceof Player ? type.damageVsPlayer : type.damageVsLiving);
+		armourHit=hit.getLocation();stoppedByArmour=false;
+		try {
+			if(owner instanceof LivingEntity livingOwner)
+				target.hurt(damageSources().mobProjectile(this, livingOwner), hitDamage);
+			else target.hurt(damageSources().thrown(this, owner), hitDamage);
+		} finally {armourHit=null;}
 
 		if(target instanceof LivingEntity living)
 		{
@@ -320,7 +326,7 @@ public class EntityBullet extends Projectile
 			}
 		}
 
-		penetratingPower -= 1F;
+		penetratingPower = stoppedByArmour ? -1F : penetratingPower-1F;
 		if(penetratingPower <= 0F)
 			detonated = true;
 	}

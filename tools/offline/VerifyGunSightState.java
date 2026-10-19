@@ -152,6 +152,28 @@ public final class VerifyGunSightState {
         check(GunSightState.scopeSight(GunAttachments.view(irons,ironStack))==null,"folded MP7 iron sights never magnify");
         apply(ironStack,irons,GunSightState.TOGGLE);ironTree=GunAttachments.read(irons,ironStack);
         check(ironTree.get(0).getFirst().name.equals(front.shortName) && ironTree.get(1).getFirst().name.equals(rear.shortName),"MP7 front/rear fold pair restores exactly");
+        if(args.length>1) {
+            var octagon=new OfflinePack(Path.of(args[1]));octagon.readTypes();for(var type:octagon.types)register(type);
+            var rear1=AttachmentType.getAttachment("CICIS4RearSight");
+            var rear2=AttachmentType.getAttachment("CICIS4RearSight2");
+            var rear3=AttachmentType.getAttachment("CICIS4RearSightFlipped");
+            check(!rear1.isFoldedVariant() && !rear2.isFoldedVariant() && rear3.isFoldedVariant(),"three-state rear sight distinguishes second aperture from generic folded endpoint");
+            check(rear1.isShadowTransitionTo(rear2) && rear2.isShadowTransitionTo(rear3)
+                    && rear3.isShadowTransitionTo(rear1),"every directed edge of actual three-state cycle is valid");
+            check(!rear1.isShadowTransitionTo(rear3),"undeclared cycle shortcut stays rejected");
+            var cycle=fixture("SightActualOctagonCycle","AttachPoints 0 0 0","MaxAttachments 1");
+            var cycleStack=new ItemStack(cycle.item);GunAttachments.write(cycleStack,List.of(List.of(node(rear1,0))));
+            for(var target:List.of(rear2,rear3,rear1)) {
+                var before=GunAttachments.view(cycle,cycleStack);
+                apply(cycleStack,cycle,GunSightState.TOGGLE);
+                var after=GunAttachments.view(cycle,cycleStack);
+                var changes=GunSightState.foldChanges(before,after);
+                check(changes.size()==1 && changes.getFirst().to().equals(target.shortName),"actual cycle chooses declared next state "+target.shortName);
+                var event=new com.flansmod.common.network.GunSightAnimationPayload(1,0,cycle.shortName,
+                        GunAttachments.revision(cycleStack),GunAttachments.sightRevision(cycleStack),0,1,changes);
+                check(com.flansmod.client.SightFoldAnimations.matches(event,cycleStack),"client accepts declared three-state animation "+target.shortName);
+            }
+        }
         System.out.println("PASS VerifyGunSightState: "+checks+" assertions");
     }
 }

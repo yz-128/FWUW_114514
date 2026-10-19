@@ -34,13 +34,13 @@ public final class Textures
 	private record Key(String name, boolean fallback) { }
 	private static volatile java.util.Map<Key, java.util.Optional<ResourceLocation>> resolved =
 			new java.util.concurrent.ConcurrentHashMap<>();
-	private record ArmourKey(String name, int slot) { }
-	private static volatile java.util.Map<ArmourKey, java.util.Optional<ResourceLocation>> armourResolved =
+	private record ReticleKey(String name,int frame) { }
+	private static volatile java.util.Map<ReticleKey, java.util.Optional<ResourceLocation>> reticleResolved =
 			new java.util.concurrent.ConcurrentHashMap<>();
 	/** A fresh map prevents in-flight lookups from publishing into the new resource generation. */
 	public static void clear() {
 		resolved = new java.util.concurrent.ConcurrentHashMap<>();
-		armourResolved = new java.util.concurrent.ConcurrentHashMap<>();
+		reticleResolved = new java.util.concurrent.ConcurrentHashMap<>();
 	}
 
 	/** The stock round's skin, used when a bullet definition names none. */
@@ -53,11 +53,9 @@ public final class Textures
 		return of(type == null ? null : type.texture, false);
 	}
 
-    /** Legacy armour uses armor/<name>_1.png or _2.png, independently of held-item skins. */
+    /** Native armour rendering and UV checks share a per-item, source-isolated material. */
     public static ResourceLocation forArmour(com.flansmod.common.types.ArmourType type) {
-        String name = type.armourTextureName == null ? type.texture : type.armourTextureName;
-        return armourResolved.computeIfAbsent(new ArmourKey(name, type.type),
-                ignored -> java.util.Optional.ofNullable(forArmour(type, Textures::has))).orElse(null);
+        return ArmourResources.texture(type);
     }
 
     public static ResourceLocation forArmour(com.flansmod.common.types.ArmourType type,
@@ -69,7 +67,7 @@ public final class Textures
         if(texture.contains(":")) return ResourceLocation.tryParse(texture);
         String stem = texture.replaceFirst("\\.png$", "");
         int layer = type.type == 2 ? 2 : 1;
-        for(String folder : new String[] {"armor/", "textures/armor/", "textures/models/armor/"}) {
+        for(String folder : new String[] {"armor/", "textures/armor/", "textures/models/armor/", "skins/armours/", "textures/skins/armours/"}) {
             var location = ResourceLocation.fromNamespaceAndPath(FlansMod.MODID, folder + stem + "_" + layer + ".png");
             if(exists.test(location)) return location;
         }
@@ -95,6 +93,42 @@ public final class Textures
 	public static ResourceLocation forBullet(ShootableType bullet)
 	{
 		return of(bullet == null ? null : bullet.texture, true);
+	}
+
+	private static String followerSkin(com.flansmod.common.types.GunType magazine) {
+		String texture=magazine.magFollowerTexture;
+		return texture==null || texture.isBlank() || texture.equalsIgnoreCase("None") ? magazine.texture : texture;
+	}
+	/** None inherits the magazine skin, as the original follower renderer did. */
+	public static ResourceLocation forMagazineFollower(com.flansmod.common.types.GunType magazine) {
+		return of(followerSkin(magazine),false);
+	}
+	public static ResourceLocation forMagazineFollower(com.flansmod.common.types.GunType magazine,
+			java.util.function.Predicate<ResourceLocation> exists) {
+		return of(followerSkin(magazine),false,exists);
+	}
+
+	/** A numbered dot frame is preferred, but older packs also ship a single unsuffixed skin. */
+	public static ResourceLocation forReticle(com.flansmod.common.types.AttachmentType type,int frame) {
+		String name=type.lightStuffTexture;
+		if(name==null || name.isBlank()) return forType(type);
+		int selected=Math.clamp(frame,0,Math.max(0,type.lightTextureCount-1));
+		return reticleResolved.computeIfAbsent(new ReticleKey(name,selected),
+			key->java.util.Optional.ofNullable(forReticle(type,selected,Textures::has))).orElse(null);
+	}
+
+	public static ResourceLocation forReticle(com.flansmod.common.types.AttachmentType type,int frame,
+			java.util.function.Predicate<ResourceLocation> exists) {
+		String name=type.lightStuffTexture;
+		if(name==null || name.isBlank()) return forType(type,exists);
+		int selected=Math.clamp(frame,0,Math.max(0,type.lightTextureCount-1));
+		String stem=name.replaceFirst("(?i)\\.png$", "");
+		String suffix=stem.contains(":")?".png":"";
+		for(String candidate:new String[]{stem+selected,stem+"_"+selected,stem+"0",stem+"_0",stem}) {
+			ResourceLocation id=of(candidate+suffix,false,exists);
+			if(id!=null && exists.test(id)) return id;
+		}
+		return of(stem+selected+suffix,false,exists);
 	}
 
 	/**

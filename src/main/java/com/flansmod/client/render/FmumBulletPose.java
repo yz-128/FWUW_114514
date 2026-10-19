@@ -9,6 +9,17 @@ import org.joml.Matrix4f;
 public final class FmumBulletPose {
 	private FmumBulletPose() { }
 	public record Seat(int ammunitionIndex,Matrix4f pose) { }
+	/** FMUM uses the round count, saturated at the last authored follower position. */
+	public static Matrix4f follower(Model model,int rounds) {
+		if(model==null) return null;
+		float[][] positions=model.fmumVectorArrays.get("magFollowerAttachPos");
+		if(positions==null || positions.length==0) return null;
+		int index=Math.clamp(rounds,0,positions.length-1);
+		Matrix4f pose=FmumActionPose.translate(new Matrix4f(),positions[index],1F);
+		float[][] rotations=model.fmumVectorArrays.get("magFollowerAttachRot");
+		if(rotations!=null && index<rotations.length) FmumActionPose.rotate(pose,rotations[index]);
+		return pose;
+	}
 	public static List<Seat> seats(Model model,int rounds) {
 		List<Seat> result=new ArrayList<>();
 		if(model==null || rounds<=0) return result;

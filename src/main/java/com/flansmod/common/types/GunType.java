@@ -182,6 +182,7 @@ public class GunType extends ModifiableType implements Cloneable
 	public String leftArmModel, leftArmTexture, rightArmModel, rightArmTexture;
 	/** The magazine follower model, and its skin. */
 	public String magFollowerModel, magFollowerTexture;
+	public float magFollowerScale = 1F;
 	/** The muzzle and chamber smoke models, with FMUM's vanish/scale tuning. */
 	public Smoke muzzleSmoke = new Smoke(), chamberSmoke = new Smoke();
 	/** The arrow/pointer model the packs ship for aiming. */
@@ -466,7 +467,10 @@ public class GunType extends ModifiableType implements Cloneable
 
 				// Ammo is resolved by name after every pack has been read: a gun may list
 				// bullets that live in a different pack, and zip packs are read in arbitrary order.
-				case "Ammo" -> ammoNames.add(split[1]);
+				case "Ammo" -> {
+					for(int i=1;i<split.length;i++)
+						if(!split[i].equalsIgnoreCase("next")) ammoNames.add(split[i]);
+				}
 				case "NumAmmoSlots", "NumAmmoItemsInGun", "LoadIntoGun" -> numAmmoItemsInGun = toInt(split[1]);
 				case "BulletSpeed" -> bulletSpeed = toFloat(split[1]);
 				case "CanShootUnderwater" -> canShootUnderwater = toBool(split[1]);
@@ -782,7 +786,9 @@ public class GunType extends ModifiableType implements Cloneable
 				case "MagFollowerModel" -> {
 					magFollowerModel = split[1];
 					if(split.length > 2)
-						magFollowerTexture = split[2];
+						magFollowerTexture = split[2].equalsIgnoreCase("None") ? null : split[2];
+					if(split.length > 3)
+						magFollowerScale = toFloat(split[3]);
 				}
 				case "MuzzleSmokeModel" -> parseSmoke(split, muzzleSmoke, true);
 				case "ChamberSmokeModel" -> parseSmoke(split, chamberSmoke, false);

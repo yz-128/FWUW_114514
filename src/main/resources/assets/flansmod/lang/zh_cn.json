@@ -156,5 +156,11 @@
   "firemode.fullauto": "全自动",
   "firemode.burst": "点射",
   "firemode.firemode": "射击模式",
-  "gui.holdsneakkeytoshowdetails": "按住潜行键显示详情"
+  "gui.holdsneakkeytoshowdetails": "按住潜行键显示详情",
+  "key.flansmod.armour_mask": "切换头盔面罩",
+  "armour.flansmod.mask_hint": "支持面罩切换（默认 K，可在按键设置调整）",
+  "armour.flansmod.proof.head": "头部当前防护等级：%s",
+  "armour.flansmod.proof.body": "躯干当前防护等级：%s",
+  "armour.flansmod.proof.left_arm": "左臂当前防护等级：%s",
+  "armour.flansmod.proof.right_arm": "右臂当前防护等级：%s"
 }

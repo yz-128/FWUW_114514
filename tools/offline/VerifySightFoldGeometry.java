@@ -80,6 +80,15 @@ public final class VerifySightFoldGeometry {
         pair("G33Enabled","G33Disabled",41);pair("G33Disabled","G33Enabled",41);
         pair("MP7Frontsight","MP7FrontsightFolded",14);pair("MP7Rearsight","MP7RearsightFolded",21);
         pair("QBZ191FrontSight","QBZ191FrontSightFolded",14);pair("QBZ191RearSight","QBZ191RearSightFolded",0);
+        if(args.length>1) {
+            new OfflinePack(Path.of(args[1])).readTypes();
+            pair("G33","G33Flipped",0);pair("G33Flipped","G33",0);
+            pair("CICIS4FrontSight","CICIS4FrontSightFlipped",0);
+            pair("HK416FrontSight","HK416FrontSightFlipped",0);
+            pair("CICIS4RearSight","CICIS4RearSight2",0);
+            pair("CICIS4RearSight2","CICIS4RearSightFlipped",0);
+            pair("CICIS4RearSightFlipped","CICIS4RearSight",0);
+        }
         System.out.println("PASS: "+checks+" assertions; real five endpoint pairs, bidirectional G33, fixed bases, reindexed QBZ matches, exact mesh conservation, rigid intermediate poses and nonrigid fallback. Offline only; no game/OpenGL executed.");
     }
 }

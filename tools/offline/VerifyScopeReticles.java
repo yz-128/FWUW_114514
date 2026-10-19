@@ -117,7 +117,10 @@ public final class VerifyScopeReticles {
         var rig=ModelCache.rigFor(scope.type(),scope.type().modelScale);
         var glass=ModelCache.rigForReference(scope.type().scopeGlassModel,1F);
         check(rig!=null && glass!=null,"real scope body and glass loaded");
-        var recorder=new Recorder();ScopeReticleRenderer.render(new PoseStack(),recorder,view,scope,rig,glass,8,0,mirrored);
+        var eye=FmumSightPicture.vector(rig.animation,"pupilRefCenter",0,0,0).mul(scope.type().modelScale).add(-.5F,0,0);
+        var toEye=new Matrix4f().rotationY((float)Math.PI/2).translate(new Vector3f(eye).negate());
+        var projection=new Matrix4f().perspective((float)Math.toRadians(70),16F/9F,.01F,100F);
+        var recorder=new Recorder();ScopeReticleRenderer.render(new PoseStack(),recorder,view,scope,rig,glass,toEye,projection,35,0,mirrored);
         check(!recorder.points.isEmpty() && recorder.points.size()%4==0,"actual renderer emits complete clipped reticle quads");
         check(recorder.fullBright==recorder.points.size(),"every actual reticle vertex is emissive full-bright");
         for(var p:recorder.points){

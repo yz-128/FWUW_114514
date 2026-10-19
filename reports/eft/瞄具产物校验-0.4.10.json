@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Asia/Shanghai",
+  "artifact": "build/libs/flansmod-0.4.10.jar",
+  "bytes": 669853,
+  "sha256": "864CA81D3D47A0A71A2FF7255D431A1080B5307CC5272445DA7DFEFD3BE92E0C",
+  "javaClassMajor": 65,
+  "networkProtocol": "12",
+  "opticalDefinitions": 41,
+  "renderedVariants": 416,
+  "finalLogCount": 23,
+  "checks": {
+    "allModernSights": 441130,
+    "allLegacySights": 35446,
+    "scopeReticles": 30355,
+    "gunSightState": 69,
+    "sightFoldGeometry": 206968,
+    "sightFoldPlayback": 538125,
+    "sightPicture": 240,
+    "sightAlignment": 29,
+    "scopeZoom": 42,
+    "modelTransforms": 1463
+  },
+  "gameLaunched": false,
+  "verificationDirectory": "build/verification-all-optics-0.4.10",
+  "reproduce": "tools/offline/RunOpticsAudit.ps1"
+}

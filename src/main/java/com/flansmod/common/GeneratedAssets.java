@@ -212,12 +212,10 @@ public class GeneratedAssets extends AbstractPackResources
             // Modern ArmorMaterial layers address this conventional path. The source stays in
             // the original pack; only a runtime resource alias is generated alongside icons.
             if(type instanceof com.flansmod.common.types.ArmourType armour) {
-                var texture = com.flansmod.client.render.Textures.forArmour(armour, location ->
-                        ContentPackIndex.current().find("assets/" + location.getNamespace() + "/" + location.getPath(), true).isPresent());
-                if(texture != null) {
-                    var source = ContentPackIndex.current().find("assets/" + texture.getNamespace() + "/" + texture.getPath(), true);
-                    if(source.isPresent()) try {
-                        byte[] pixels = source.get().readAllBytes();
+                var source = com.flansmod.client.render.ArmourResources.source(armour);
+                if(source.isPresent()) {
+                    try {
+                        byte[] pixels = source.get().entry().readAllBytes();
                         for(int layer = 1; layer <= 2; layer++)
                             out.put("textures/models/armor/legacy/" + path + "_layer_" + layer + ".png", pixels);
                     } catch(IOException failure) {
@@ -358,7 +356,12 @@ public class GeneratedAssets extends AbstractPackResources
 	{
 		String wanted = "assets/" + FlansMod.MODID + "/textures/" + iconPathLower + ".png";
 		var entry = ContentPackIndex.current().find(wanted, true);
-		if(entry.isEmpty()) return null;
+		if(entry.isEmpty()) {
+			// Bundled repairs only fill absent icons; a content pack's own replacement wins.
+			try(var fallback=GeneratedAssets.class.getResourceAsStream("/"+wanted)) {
+				return fallback==null ? null : fallback.readAllBytes();
+			} catch(IOException failure) { return null; }
+		}
 		try
 		{
 			return entry.get().readAllBytes();

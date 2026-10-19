@@ -1,0 +1,32 @@
+Gun	Magazine	Status	RoundsBefore	RoundsAfterFeeding
+EscapeFromTarcraftReforged_1.5.3/ADAR	EscapeFromTarcraftReforged_1.5.3/STANAG_556x45_30Rounds	PASS	30	30
+EscapeFromTarcraftReforged_1.5.3/ADAR	EscapeFromTarcraftReforged_1.5.3/MAG5_60Rounds	PASS	60	60
+EscapeFromTarcraftReforged_1.5.3/ADAR	EscapeFromTarcraftReforged_1.5.3/TESTmag	PASS	60	60
+EscapeFromTarcraftReforged_1.5.3/ColtM4A1	EscapeFromTarcraftReforged_1.5.3/STANAG_556x45_30Rounds	PASS	30	30
+EscapeFromTarcraftReforged_1.5.3/ColtM4A1	EscapeFromTarcraftReforged_1.5.3/MAG5_60Rounds	PASS	60	60
+EscapeFromTarcraftReforged_1.5.3/ColtM4A1	EscapeFromTarcraftReforged_1.5.3/TESTmag	PASS	60	60
+OctagonWeaponsReforged_1.33/HK416D10RS	OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	PASS	20	20
+OctagonWeaponsReforged_1.33/HK416D10RS	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	PASS	30	30
+OctagonWeaponsReforged_1.33/HK416D10RS	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	PASS	30	30
+OctagonWeaponsReforged_1.33/HK416D10RS	OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	PASS	60	60
+OctagonWeaponsReforged_1.33/HK416LowerReceiver	OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416LowerReceiver	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416LowerReceiver	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416LowerReceiver	OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416ND10RS	OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	PASS	20	20
+OctagonWeaponsReforged_1.33/HK416ND10RS	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	PASS	30	30
+OctagonWeaponsReforged_1.33/HK416ND10RS	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	PASS	30	30
+OctagonWeaponsReforged_1.33/HK416ND10RS	OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	PASS	60	60
+OctagonWeaponsReforged_1.33/HK416ND10RS	OctagonWeaponsReforged_1.33/XProductsX15556x45mm50RoundDrum	PASS	50	50
+OctagonWeaponsReforged_1.33/HK416NLowerReceiver	OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416NLowerReceiver	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416NLowerReceiver	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416NLowerReceiver	OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416NLowerReceiver	OctagonWeaponsReforged_1.33/XProductsX15556x45mm50RoundDrum	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416TacticalLowerReceiver	OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416TacticalLowerReceiver	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416TacticalLowerReceiver	OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416TacticalLowerReceiver	OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	SKIPPED: incomplete base assembly	0	0
+OctagonWeaponsReforged_1.33/HK416TacticalLowerReceiver	OctagonWeaponsReforged_1.33/XProductsX15556x45mm50RoundDrum	SKIPPED: incomplete base assembly	0	0
+[FMUM]EscapeFromTarCraft-Guns/HK416A5	EscapeFromTarcraftReforged_1.5.3/STANAG_556x45_30Rounds	PASS	30	30
+[FMUM]EscapeFromTarCraft-Guns/HK416A5	EscapeFromTarcraftReforged_1.5.3/MAG5_60Rounds	PASS	60	60

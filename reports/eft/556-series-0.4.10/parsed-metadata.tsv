@@ -1,0 +1,29 @@
+Item	Field	Declared	Parsed	RawModelFound	RawSkinFound
+EscapeFromTarcraftReforged_1.5.3/5.56x45mm55HP	BulletModel	EFTRBul.556x45mm	EFTRBul.556x45mm	true	true
+EscapeFromTarcraftReforged_1.5.3/5.56x45mmM855	BulletModel	EFTRBul.556x45mm	EFTRBul.556x45mm	true	true
+EscapeFromTarcraftReforged_1.5.3/5.56x45mmM855A1	BulletModel	EFTRBul.556x45mm	EFTRBul.556x45mm	true	true
+EscapeFromTarcraftReforged_1.5.3/5.56x45mmM856	BulletModel	EFTRBul.556x45mm	EFTRBul.556x45mm	true	true
+EscapeFromTarcraftReforged_1.5.3/5.56x45mmM856A1	BulletModel	EFTRBul.556x45mm	EFTRBul.556x45mm	true	true
+EscapeFromTarcraftReforged_1.5.3/5.56x45mmM995	BulletModel	EFTRBul.556x45mm	EFTRBul.556x45mm	true	true
+EscapeFromTarcraftReforged_1.5.3/5.56x45mmWarmage	BulletModel	EFTRBul.556x45mm	EFTRBul.556x45mm	true	true
+EscapeFromTarcraftReforged_1.5.3/556x45mmCasing	BulletModel	EFTRBul.556x45mmCasing	EFTRBul.556x45mmCasing	true	true
+OctagonWeaponsReforged_1.33/556x45mm	BulletModel	OCRemakeMagazinesBullets.556x45mm	null	true	true
+OctagonWeaponsReforged_1.33/556x45mm	RecipeOutput	30	1	n/a	n/a
+OctagonWeaponsReforged_1.33/556x45mm	Icon	556x45mm	null	path fallback found=true	n/a
+OctagonWeaponsReforged_1.33/556x45mmAP	BulletModel	OCRemakeMagazinesBullets.556x45mmAP	null	true	true
+OctagonWeaponsReforged_1.33/556x45mmAP	RecipeOutput	30	1	n/a	n/a
+OctagonWeaponsReforged_1.33/556x45mmAP	Icon	556x45mmAP	null	path fallback found=true	n/a
+OctagonWeaponsReforged_1.33/556x45mmCase	BulletModel	OCRemakeMagazinesBullets.556x45mmCase	OCRemakeMagazinesBullets.556x45mmCase	true	true
+OctagonWeaponsReforged_1.33/556x45mmCaseAP	BulletModel	OCRemakeMagazinesBullets.556x45mmCaseAP	OCRemakeMagazinesBullets.556x45mmCaseAP	true	true
+OctagonWeaponsReforged_1.33/556x45mmCaseJHP	BulletModel	OCRemakeMagazinesBullets.556x45mmCaseJHP	OCRemakeMagazinesBullets.556x45mmCaseJHP	true	true
+OctagonWeaponsReforged_1.33/556x45mmJHP	BulletModel	OCRemakeMagazinesBullets.556x45mmJHP	null	true	true
+OctagonWeaponsReforged_1.33/556x45mmJHP	RecipeOutput	30	1	n/a	n/a
+OctagonWeaponsReforged_1.33/556x45mmJHP	Icon	556x45mmJHP	null	path fallback found=true	n/a
+[FMUM]EscapeFromTarCraft-Guns/5.56x45mm55HP	BulletModel	EFTbullets.556x45mm	EFTbullets.556x45mm	true	true
+[FMUM]EscapeFromTarCraft-Guns/5.56x45mmM855	BulletModel	EFTbullets.556x45mm	EFTbullets.556x45mm	true	true
+[FMUM]EscapeFromTarCraft-Guns/5.56x45mmM855A1	BulletModel	EFTbullets.556x45mm	EFTbullets.556x45mm	true	true
+[FMUM]EscapeFromTarCraft-Guns/5.56x45mmM856	BulletModel	EFTbullets.556x45mm	EFTbullets.556x45mm	true	true
+[FMUM]EscapeFromTarCraft-Guns/5.56x45mmM856A1	BulletModel	EFTbullets.556x45mm	EFTbullets.556x45mm	true	true
+[FMUM]EscapeFromTarCraft-Guns/5.56x45mmM995	BulletModel	EFTbullets.556x45mm	EFTbullets.556x45mm	true	true
+[FMUM]EscapeFromTarCraft-Guns/5.56x45mmWarmage	BulletModel	EFTbullets.556x45mm	EFTbullets.556x45mm	true	true
+[FMUM]EscapeFromTarCraft-Guns/556x45BulletCase	BulletModel	EFTbullets.556X45Casing	EFTbullets.556X45Casing	true	true

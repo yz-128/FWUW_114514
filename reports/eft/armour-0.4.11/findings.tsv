@@ -1,0 +1,18 @@
+Item	Problem	Detail
+OctagonWeaponsReforged_1.33/CMSFassault	NONBREAKABLE_IGNORED	
+OctagonWeaponsReforged_1.33/CMSFengineer	MISSING_ICON	flansmod:textures/items/cmsfengineer.png
+OctagonWeaponsReforged_1.33/CMSFengineer	NONBREAKABLE_IGNORED	
+OctagonWeaponsReforged_1.33/CMSFscout	NONBREAKABLE_IGNORED	
+OctagonWeaponsReforged_1.33/CommanderHat	MISSING_TEXTURE	flansmod:textures/skins/commanderfemale.png
+OctagonWeaponsReforged_1.33/CommanderHat	MISSING_MODEL	OCRemakeArmours.CommanderHat
+OctagonWeaponsReforged_1.33/CommanderHat	NONBREAKABLE_IGNORED	
+OctagonWeaponsReforged_1.33/Headphone	MISSING_ICON	flansmod:textures/items/headphone.png
+OctagonWeaponsReforged_1.33/HeavyHeavyArmour	MISSING_ICON	flansmod:textures/items/heavyheavyarmour.png
+OctagonWeaponsReforged_1.33/Vulkan5zHelmet	MISSING_ICON	flansmod:textures/items/vulkan5zhelmet.png
+[FMUM]EscapeFromTarCraft-Armor/adidasCloth	MISSING_ICON	flansmod:textures/items/adidascloth.png
+[FMUM]EscapeFromTarCraft-Armor/brokeMask	MISSING_ICON	flansmod:textures/items/brokemask.png
+[FMUM]EscapeFromTarCraft-Armor/hatBear	MISSING_ICON	flansmod:textures/items/hatbear.png
+[FMUM]EscapeFromTarCraft-Armor/jk_01	MISSING_ICON	flansmod:textures/items/jk_01.png
+[FMUM]EscapeFromTarCraft-Armor/panamaHat	MISSING_ICON	flansmod:textures/items/panamahat.png
+[FMUM]EscapeFromTarCraft-Armor/tankHat	MISSING_ICON	flansmod:textures/items/tankhat.png
+[FMUM]EscapeFromTarCraft-Armor/ushanka	MISSING_ICON	flansmod:textures/items/ushanka.png

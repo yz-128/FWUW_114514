@@ -1,0 +1,15 @@
+{
+  "jar": "flansmod-0.4.12.jar",
+  "magazineDefinitions": 10,
+  "registeredMagazines": 8,
+  "registeredRoundsAndCases": 15,
+  "firearmDefinitions": 10,
+  "registeredFirearms": 8,
+  "relatedDefinitions": 95,
+  "compressionStrokes": 2190,
+  "consumedRounds": 2190,
+  "nbtRoundTrips": 51,
+  "completeGunFeedCycles": 17,
+  "completeGunFeedRounds": 720,
+  "findingRowsNotDistinctBugs": 0
+}

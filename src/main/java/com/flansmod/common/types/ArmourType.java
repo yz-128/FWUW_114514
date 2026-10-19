@@ -44,6 +44,7 @@ public class ArmourType extends InfoType
 
 	/** How long the plates last, and the multipliers on wear from blunt and penetrating hits. */
 	public int durability = 0;
+	public boolean breakable = true;
 	public float bluntDamageMult = 1F, bluntDurabilityMult = 1F;
 	public float penetratedDamageMult = 1F, penetratedDurabilityMult = 1F;
 
@@ -108,6 +109,7 @@ public class ArmourType extends InfoType
 				}
 
 				case "Durability" -> durability = toInt(split[1]);
+				case "BreakableArmor", "BreakableArmour" -> breakable = toBool(split[1]);
 				case "BluntDamageMult" -> {
 					bluntDamageMult = toFloat(split[1]);
 					if(split.length > 2)

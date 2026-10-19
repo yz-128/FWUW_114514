@@ -13,6 +13,44 @@ public final class FmumSightPicture {
 	public static float pupilDistance(ModelGeometry.Model model,float scale,Vector3f eye) {
 		return Math.max(.001F,vector(model,"pupilRefCenter",0,0,0).mul(scale).distance(eye));
 	}
+	/** Keep the definition's axis whenever it can see its own authored reticle. Some old packs
+	 * reuse a sight mesh with an AimCenter outside its aperture; use that aperture's area centre
+	 * only in that invalid case. No definition or mount is changed. */
+	public static Vector3f aimCenter(ModelGeometry.Model model,float authoredY,float authoredZ) {
+		var result=new Vector3f(0,authoredY,authoredZ);
+		if(model==null)return result;
+		float[][] border=model.fmumVectorArrays.get("reticleBorder"),targets=model.fmumVectorArrays.get("reticleAt");
+		if(border==null || border.length<3 || targets==null || targets.length==0)return result;
+		var normal=vector(model,"normalVecOfDotBorder",1,0,0);
+		if(!normal.isFinite() || Math.abs(normal.x)<.99F)return result;
+		if(border[0]==null || border[0].length<3)return result;
+		float plane=border[0][0];
+		for(var p:border)if(p==null || p.length<3 || !new Vector3f(p).isFinite() || Math.abs(p[0]-plane)>1E-4F)return result;
+		var eye=new Vector3f(plane-1,authoredY,authoredZ);
+		for(var target:targets)if(target!=null && target.length>=3 && intersection(eye,new Vector3f(target),border,normal)!=null)return result;
+		double area=0,y=0,z=0;
+		for(int i=0,j=border.length-1;i<border.length;j=i++) {
+			double cross=(double)border[j][1]*border[i][2]-(double)border[i][1]*border[j][2];
+			area+=cross;y+=(border[j][1]+border[i][1])*cross;z+=(border[j][2]+border[i][2])*cross;
+		}
+		if(Math.abs(area)<1E-12)return result;
+		var center=new Vector3f(plane,(float)(y/(3*area)),(float)(z/(3*area)));
+		if(!center.isFinite() || !insideBorder(center,border,normal))return result;
+		return result.set(0,center.y,center.z);
+	}
+
+	/** A lens crossing the eye must not submit half a quad into the following mesh. */
+	public static float[][] screenQuad(org.joml.Matrix4f clip,float[][] positions) {
+		if(positions==null || positions.length!=4)return null;
+		var uv=new float[4][2];
+		for(int i=0;i<4;i++) {
+			var p=positions[i];if(p==null || p.length<3)return null;
+			var c=clip.transform(new org.joml.Vector4f(p[0],p[1],p[2],1));
+			if(!c.isFinite() || c.w<=1E-6F)return null;
+			uv[i][0]=c.x/c.w*.5F+.5F;uv[i][1]=c.y/c.w*.5F+.5F;
+		}
+		return uv;
+	}
 	/** The distant reticle point specifies a ray, never a model translation. */
 	public static Vector3f intersection(Vector3f eye,Vector3f far,float[][] border,Vector3f normal) {
 		if(border==null || border.length<3 || !eye.isFinite() || !far.isFinite() || !normal.isFinite())return null;

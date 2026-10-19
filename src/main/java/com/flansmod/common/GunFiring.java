@@ -372,10 +372,20 @@ public final class GunFiring
 		return true;
 	}
 
-	/** Fires one round out of the given chamber, spending it. */
+	/** FMUM preCheckOnFire: stored cases occupy the chamber but cannot be fired. */
+	public static com.flansmod.common.types.BulletType liveRound(ItemStack stack,GunType gun,int chamber) {
+		if(gun.itsType==GunType.GunItsType.MAG || chamber<0) return null;
+		ItemStack round=GunMagazine.getChamberedRound(stack);
+		if(round.isEmpty()) round=GunMagazine.chamberedBullet(GunMagazine.get(stack,gun,chamber));
+		return InfoType.getType(round) instanceof com.flansmod.common.types.BulletType bullet && !bullet.isCase ? bullet : null;
+	}
+
+	/** Fires one live round, leaving an unshootable case for manual extraction. */
 	static void fireRound(Level level, Player player, ItemStack stack, GunType gun, PlayerData data,
 						  boolean left, int chamber)
 	{
+		var loadedDefinition=liveRound(stack,gun,chamber);
+		if(loadedDefinition==null) return;
 		GunStats.Values stats=GunStats.effective(gun,stack);
 		GunStats.Shot kick=level.isClientSide && !left?GunStats.shot(gun,stack,player.isShiftKeyDown(),
 				level.random.nextFloat(),level.random.nextFloat()):null;
@@ -383,19 +393,14 @@ public final class GunFiring
 		// rounds out of the item's data (rolling onto the next magazine in the stack when one runs
 		// dry) and a loose-round stack by size. This is the 1.20.1 build's consumeRound.
 		ItemStack round = GunMagazine.get(stack, gun, chamber);
-		com.flansmod.common.types.BulletType loadedDefinition = null;
 		ItemStack chambered=GunMagazine.getChamberedRound(stack);
 		if(!chambered.isEmpty()) {
-			if(InfoType.getType(chambered) instanceof com.flansmod.common.types.BulletType bullet) loadedDefinition=bullet;
 			GunMagazine.spendChamberedRound(stack,gun);
 		} else if(!round.isEmpty())
 		{
 			// The round that is actually chambered decides what flies out — a gun that accepts two
 			// ammunition types fires whichever one the player loaded, which is the whole reason
 			// 1.7.10 stored item stacks in the gun rather than a count.
-			if(GunMagazine.chamberedBullet(round).getItem() instanceof ItemFlan flan && flan.type instanceof com.flansmod.common.types.BulletType bullet)
-				loadedDefinition = bullet;
-
 			GunMagazine.consumeRound(round);
 			GunMagazine.set(stack, gun, chamber, GunMagazine.roundsRemaining(round) > 0
 					|| GunMagazine.roundsPerItem(round) > 1 ? round : ItemStack.EMPTY);

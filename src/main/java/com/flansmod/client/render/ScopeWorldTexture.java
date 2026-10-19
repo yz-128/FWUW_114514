@@ -59,6 +59,7 @@ public final class ScopeWorldTexture extends RenderStateShard {
 		// Iris renders the world into its own targets; a copy taken during its shadow pass would
 		// capture the depth-only view. Everything else is left to the normal path, where a copy of
 		// whatever is bound still yields a magnified world image.
+		ShaderMuzzleRenderer.shadersEnabled(); // Resolve Iris before the first shadow-pass query.
 		if(ShaderMuzzleRenderer.shadowPass())return;
 		if(mc.player==null || !mc.options.getCameraType().isFirstPerson() || AimState.blend(event.getPartialTick())<.01F)return;
 		if(com.flansmod.common.PlayerHandler.getPlayerData(mc.player).sightFolding(mc.player))return;
@@ -95,6 +96,6 @@ public final class ScopeWorldTexture extends RenderStateShard {
 			GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_S,GL12.GL_CLAMP_TO_EDGE);
 			GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_T,GL12.GL_CLAMP_TO_EDGE);
 		}
-		@Override public void load(ResourceManager manager) {releaseId();width=height=0;ready=false;}
+		@Override public void load(ResourceManager manager) {releaseId();width=height=0;ready=false;failed=false;}
 	}
 }

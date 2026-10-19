@@ -59,7 +59,7 @@ public final class SightFoldAnimations {
         for(var part:event.parts()) {
             var from=AttachmentType.getAttachment(part.from());var to=AttachmentType.getAttachment(part.to());
             if(!GunAttachments.validPath(part.path()) || from==null || to==null
-                    || !from.shadowType.equalsIgnoreCase(to.shortName) || !to.shadowType.equalsIgnoreCase(from.shortName))return false;
+                    || !from.isShadowTransitionTo(to))return false;
             var node=GunAttachments.nodeAt(view.defaultAttachments,part.path());
             if(node==null || (!node.name.equals(part.from()) && !node.name.equals(part.to())))return false;
         }

@@ -35,7 +35,10 @@ public final class ItemFlanArmour extends ArmorItem
 	{
 		properties.stacksTo(1);
 		// Cosmetic equipment without a Durability line stays unbreakable, as in the pack.
-		return armour.durability > 0 ? properties.durability(armour.durability) : properties;
+		if(armour.durability>0)properties.durability(armour.durability);
+		if(!armour.breakable)properties.component(net.minecraft.core.component.DataComponents.UNBREAKABLE,
+				new net.minecraft.world.item.component.Unbreakable(true));
+		return properties;
 	}
 
 	private static ArmorItem.Type slotType(int slot)
@@ -114,6 +117,28 @@ public final class ItemFlanArmour extends ArmorItem
 		if(stack.isDamageableItem())
 			lines.add(Component.translatable("armour.flansmod.durability",stack.getMaxDamage()-stack.getDamageValue(),stack.getMaxDamage())
 					.withStyle(net.minecraft.ChatFormatting.GRAY));
+		String[] parts={"head","body","left_arm","right_arm"};
+		for(int part=0;part<4;part++)if(armour.proofLevel[part]>0F)
+			lines.add(Component.translatable("armour.flansmod.proof."+parts[part],
+					String.format(java.util.Locale.ROOT,"%.1f",com.flansmod.common.ArmourState.proof(armour,stack,part)))
+					.withStyle(net.minecraft.ChatFormatting.BLUE));
+		if(armour.hasMask)lines.add(Component.translatable("armour.flansmod.mask_hint").withStyle(net.minecraft.ChatFormatting.GRAY));
 		lines.add(Component.translatable("armour.flansmod.equip").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+	}
+	@Override public void inventoryTick(ItemStack stack,net.minecraft.world.level.Level level,
+			net.minecraft.world.entity.Entity entity,int slot,boolean selected) {
+		super.inventoryTick(stack,level,entity,slot,selected);
+		if(level.isClientSide||!(entity instanceof net.minecraft.world.entity.LivingEntity living)
+				||living.getItemBySlot(getEquipmentSlot())!=stack)return;
+		if(armour.negateFallDamage)living.fallDistance=0;
+		if(living.tickCount%20!=0)return;
+		if(armour.invisible)effect(living,net.minecraft.world.effect.MobEffects.INVISIBILITY,0);
+		if(armour.fireResistance)effect(living,net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE,0);
+		if(armour.waterBreathing)effect(living,net.minecraft.world.effect.MobEffects.WATER_BREATHING,0);
+		if(armour.jumpModifier>1.01F)effect(living,net.minecraft.world.effect.MobEffects.JUMP,(int)((armour.jumpModifier-1)*2));
+	}
+	private static void effect(net.minecraft.world.entity.LivingEntity entity,
+			net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> effect,int amplifier) {
+		entity.addEffect(new net.minecraft.world.effect.MobEffectInstance(effect,40,amplifier,true,false));
 	}
 }

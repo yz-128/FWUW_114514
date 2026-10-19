@@ -18,11 +18,13 @@ public final class FlanNetwork
 	 * rather than a silently dropped packet; bump it whenever a payload's fields change.
 	 */
 	// Per-stack optical controls carry both structure and sight-state revisions.
-	private static final String VERSION = "12";
+	private static final String VERSION = "13";
 
 	@SubscribeEvent
 	public static void register(final RegisterPayloadHandlersEvent event)
 	{
+		event.registrar(VERSION).playToServer(ArmourMaskPayload.TYPE,ArmourMaskPayload.STREAM_CODEC,
+				(payload,context)->context.enqueueWork(()->payload.apply(context.player())));
 		event.registrar(VERSION).playToClient(GunSightAnimationPayload.TYPE,GunSightAnimationPayload.STREAM_CODEC,
 				(payload,context)->context.enqueueWork(()->com.flansmod.client.SightFoldAnimations.accept(payload)));
 		event.registrar(VERSION).playToServer(GunSightPayload.TYPE,GunSightPayload.STREAM_CODEC,

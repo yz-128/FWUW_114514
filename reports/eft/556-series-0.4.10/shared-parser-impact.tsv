@@ -1,0 +1,17 @@
+Item	Category	Details
+OctagonWeaponsReforged_1.33/556x45mm	SHAPELESS_MODEL_LOST	[OCRemakeMagazinesBullets.556x45mm, MagazinesBullets/556x45mm, 0.1, 6, 0, 0]
+OctagonWeaponsReforged_1.33/556x45mm	SHAPELESS_OUTPUT_LOST	[30] -> 1
+OctagonWeaponsReforged_1.33/556x45mmAP	SHAPELESS_MODEL_LOST	[OCRemakeMagazinesBullets.556x45mmAP, MagazinesBullets/556x45mmAP, 0.1, 6, 0, 0]
+OctagonWeaponsReforged_1.33/556x45mmAP	SHAPELESS_OUTPUT_LOST	[30] -> 1
+OctagonWeaponsReforged_1.33/556x45mmJHP	SHAPELESS_MODEL_LOST	[OCRemakeMagazinesBullets.556x45mmJHP, MagazinesBullets/556x45mmJHP, 0.1, 6, 0, 0]
+OctagonWeaponsReforged_1.33/556x45mmJHP	SHAPELESS_OUTPUT_LOST	[30] -> 1
+OctagonWeaponsReforged_1.33/9x19mm	SHAPELESS_MODEL_LOST	[OCRemakeMagazinesBullets.9x19mm, MagazinesBullets/9x19mm, 0.1, 4, 0, 0]
+OctagonWeaponsReforged_1.33/9x19mm	SHAPELESS_OUTPUT_LOST	[30] -> 1
+EscapeFromTarcraftReforged_1.5.3/TESTmag	MULTI_AMMO_LOST	[556x45, 57x28, 58x42, 545x39, 762x39, 762x51, 762x54, 9x19, 9x39, 127x55, 12G, 45ACP, 338]
+OctagonWeaponsReforged_1.33/556x45mm20RoundMagazine	MULTI_AMMO_LOST	[556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]
+OctagonWeaponsReforged_1.33/556x45mm30RoundMagazine	MULTI_AMMO_LOST	[556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]
+OctagonWeaponsReforged_1.33/556x45mm30RoundMagazineMagazinePull	MULTI_AMMO_LOST	[556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]
+OctagonWeaponsReforged_1.33/9x19mm15RoundMagazine	MULTI_AMMO_LOST	[9x19mmCase]
+OctagonWeaponsReforged_1.33/TEST5.56x45mmMag	MULTI_AMMO_LOST	[556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]
+OctagonWeaponsReforged_1.33/TEST9x19mmMag	MULTI_AMMO_LOST	[9x19mmCase]
+OctagonWeaponsReforged_1.33/XProductsX15556x45mm50RoundDrum	MULTI_AMMO_LOST	[556x45mmCase, 556x45mmAP, 556x45mmCaseAP, 556x45mmJHP, 556x45mmCaseJHP]

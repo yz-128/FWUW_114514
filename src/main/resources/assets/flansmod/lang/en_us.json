@@ -156,5 +156,11 @@
   "firemode.fullauto": "Full auto",
   "firemode.burst": "Burst",
   "firemode.firemode": "Fire mode",
-  "gui.holdsneakkeytoshowdetails": "Hold sneak key to show details"
+  "gui.holdsneakkeytoshowdetails": "Hold sneak key to show details",
+  "key.flansmod.armour_mask": "Toggle helmet visor",
+  "armour.flansmod.mask_hint": "Visor toggle supported (default K, configurable)",
+  "armour.flansmod.proof.head": "Current head protection: %s",
+  "armour.flansmod.proof.body": "Current body protection: %s",
+  "armour.flansmod.proof.left_arm": "Current left arm protection: %s",
+  "armour.flansmod.proof.right_arm": "Current right arm protection: %s"
 }

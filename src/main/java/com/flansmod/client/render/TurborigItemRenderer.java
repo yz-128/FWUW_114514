@@ -230,7 +230,7 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 		{
 			float partial=Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
 			float aimAds=FmumActionPose.ads(rig.animation,actionFrame(partial),AimState.blend(partial));
-			var eye=FmumFirstPersonPose.eyeInGunSpace(pose.last().pose());
+			var eye=FmumFirstPersonPose.eyeInGunSpace(new org.joml.Matrix4f(com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix()).mul(pose.last().pose()));
 			pose.mulPose(FmumFirstPersonPose.aim(new org.joml.Matrix4f(),folding.active()?folding.aimView():gun,
 					aimAds,eye));
 		}
@@ -510,6 +510,7 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 	/** Uses BulletModel/BulletTexture/BulletScale, distinct from the in-flight projectile model. */
 	private static void renderSeatedRounds(PoseStack pose,MultiBufferSource buffers,GunType type,ItemStack stack,
 			BakedRig rig,boolean mirrored,int light,int overlay) {
+		if(type.itsType==GunType.GunItsType.MAG) renderMagazineFollower(pose,buffers,type,stack,rig,mirrored,light,overlay);
 		ItemStack round=type.itsType==GunType.GunItsType.MAG?GunMagazine.chamberedBullet(stack):GunMagazine.getChamberedRound(stack);
 		if(round.isEmpty() && type.itsType!=GunType.GunItsType.MAG) round=GunMagazine.get(stack,type,0);
 		if(!(InfoType.getType(round) instanceof com.flansmod.common.types.BulletType bullet)) return;
@@ -525,6 +526,20 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 			RigRenderer.render(pose,buffers.getBuffer(RenderType.entityCutout(texture)),bulletRig,light,overlay,1F,1F,1F,1F,mirrored);
 			pose.popPose();
 		}
+	}
+
+	private static void renderMagazineFollower(PoseStack pose,MultiBufferSource buffers,GunType type,ItemStack stack,
+			BakedRig magazineRig,boolean mirrored,int light,int overlay) {
+		if(type.magFollowerModel==null) return;
+		var position=FmumBulletPose.follower(magazineRig.animation,GunMagazine.roundsRemaining(stack));
+		if(position==null) return;
+		var texture=Textures.forMagazineFollower(type);
+		if(texture==null) return;
+		var follower=ModelCache.rigForReference(type.magFollowerModel,type.magFollowerScale,texture);
+		if(follower==null || follower.quads.isEmpty()) return;
+		pose.pushPose();pose.mulPose(position);
+		RigRenderer.render(pose,buffers.getBuffer(RenderType.entityCutout(texture)),follower,light,overlay,1F,1F,1F,1F,mirrored);
+		pose.popPose();
 	}
 
 	/**

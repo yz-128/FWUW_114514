@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,9 +27,8 @@ public final class ScopeReticleRenderer {
     private static final ImageBasis IDENTITY = new ImageBasis(1, 0, 0, 1);
     private static final Map<BakedRig, ImageBasis> IMAGE_BASES = Collections.synchronizedMap(new WeakHashMap<>());
 
-    /** The mesh's own UVs may mirror or rotate the framebuffer image. Preserve UV coverage while
-     * aligning image-right with local +Z and image-down with local -Y. Each normalized matrix row
-     * removes model size; its inverse is shared by the reticle and world-image paths. */
+    /** Legacy square-image UV normalization, retained for asset inspection. Live optics use
+     * the real eye/projection and glassUv instead of fitting a square image over the mesh. */
     private static ImageBasis imageBasis(BakedRig glass) {
         if (glass == null) return IDENTITY;
         return IMAGE_BASES.computeIfAbsent(glass, rig -> {
@@ -152,16 +152,54 @@ public final class ScopeReticleRenderer {
                 .translate(delta).rotateX((float)Math.toRadians(part.roll() - part.type().aimCenterX));
     }
 
+    /** Recover the authored UV of a point on a real glass plane, independently of its size/UV orientation. */
+    public static float[] glassUv(BakedRig.Quad quad,Vector3f eye,Vector3f target) {
+        var origin=new Vector3f(quad.positions()[0]);
+        var a=new Vector3f(quad.positions()[1]).sub(origin);
+        var b=new Vector3f(quad.positions()[3]).sub(origin);
+        var normal=new Vector3f(a).cross(b);
+        var direction=new Vector3f(target).sub(eye);
+        float denominator=direction.dot(normal);
+        if(!eye.isFinite() || !target.isFinite() || Math.abs(denominator)<1E-12F)return null;
+        float t=new Vector3f(origin).sub(eye).dot(normal)/denominator;
+        if(!Float.isFinite(t) || t<=0)return null;
+        var p=direction.mul(t).add(eye).sub(origin);
+        float aa=a.dot(a),ab=a.dot(b),bb=b.dot(b),det=aa*bb-ab*ab;
+        if(Math.abs(det)<1E-15F)return null;
+        float pa=p.dot(a),pb=p.dot(b),s=(pa*bb-pb*ab)/det,r=(pb*aa-pa*ab)/det;
+        var uv=quad.uvs();
+        return new float[]{uv[0][0]+s*(uv[1][0]-uv[0][0])+r*(uv[3][0]-uv[0][0]),
+                uv[0][1]+s*(uv[1][1]-uv[0][1])+r*(uv[3][1]-uv[0][1])};
+    }
+
+    /** Map an optical vertex through the magnified world camera back onto the physical glass.
+     * This uses the live eye and the hand projection; authored glass UVs never stand in for screen UVs. */
+    public static Vector3f lensRay(Vector3f vertex,Matrix4f scopeToEye,Matrix4f handProjection,
+                                  Matrix4f lensFromClip,double worldFov) {
+        if(!Double.isFinite(worldFov) || worldFov<=0 || worldFov>=180)return null;
+        double power=1/(Math.abs(handProjection.m11())*Math.tan(Math.toRadians(worldFov)/2));
+        Vector4f point=scopeToEye.transform(new Vector4f(vertex,1));
+        point.x*=power;point.y*=power;
+        handProjection.transform(point);
+        if(!point.isFinite() || point.w<=1E-7F)return null;
+        Vector4f ray=lensFromClip.transform(new Vector4f(point.x/point.w,point.y/point.w,-1,1));
+        return !ray.isFinite() || Math.abs(ray.w)<1E-9F?null:new Vector3f(ray.x/ray.w,ray.y/ray.w,ray.z/ray.w);
+    }
+
     /** lensPose already contains the pupil translation and attachment/glass scale. */
     public static void render(PoseStack lensPose, MultiBufferSource buffers, GunType view,
                               GunSightState.Sight scope, BakedRig scopeRig, BakedRig glass,
-                              double scopeFov, int overlay, boolean mirrored) {
+                              Matrix4f scopeToEye,Matrix4f handProjection,double scopeFov, int overlay, boolean mirrored) {
         if (scope == null || scopeRig == null || scopeRig.animation == null || glass == null) return;
         var group = GunSightState.selectedGroup(view);
         if (group == null) return;
-        // Original scope pass translates the objective to -69.5/160, with eye at -81.5/160.
-        Vector3f eye = FmumSightPicture.vector(scopeRig.animation, "scopeObjectiveLensCenter", 0, 0, 0)
-                .add(-12F / 160F, 0, 0);
+        Vector3f eye=new Matrix4f(scopeToEye).invert().transformPosition(new Vector3f());
+        if(!eye.isFinite())return;
+        Vector3f center=FmumSightPicture.vector(scopeRig.animation,"pupilRefCenter",0,0,0).mul(scope.type().modelScale);
+        Vector3f glassScale=FmumSightPicture.vector(scopeRig.animation,"scopeGlassModelScale",1,1,1).mul(scope.type().modelScale);
+        if(Math.abs(glassScale.x*glassScale.y*glassScale.z)<1E-15F)return;
+        Vector3f lensEye=new Vector3f(eye).sub(center).div(glassScale);
+        Matrix4f lensFromClip=new Matrix4f(handProjection).mul(scopeToEye).translate(center).scale(glassScale).invert();
         for (var sight : group.sights()) {
             var type = sight.type();
             if (type.isFoldedVariant() || type.lightStuffModel == null || type.lightStuffModel.isBlank()
@@ -171,8 +209,7 @@ public final class ScopeReticleRenderer {
             var model = sightRig.animation;
             float[][] border = model.fmumVectorArrays.get("reticleBorder");
             if (border == null || border.length < 3) continue;
-            var skin = type.lightStuffTexture == null || type.lightStuffTexture.isBlank() ? Textures.of(type.texture, false)
-                    : Textures.of(type.lightStuffTexture + Math.clamp(sight.node().dotFrame, 0, Math.max(0, type.lightTextureCount - 1)), false);
+            var skin = Textures.forReticle(type,sight.node().dotFrame);
             if (skin == null) continue;
             var dot = ModelCache.rigForReference(type.lightStuffModel, 1F, skin);
             if (dot == null || dot.quads.isEmpty()) continue;
@@ -188,6 +225,8 @@ public final class ScopeReticleRenderer {
             Vector3f normal = transform.transformDirection(FmumSightPicture.vector(model, "normalVecOfDotBorder", 1, 0, 0));
             float[][] targets = model.fmumVectorArrays.getOrDefault("reticleAt", new float[][]{{0, 0, 0}});
             float scale = FmumActionPose.scalar(model, "reticleScale", 1F);
+            var localEye=new Matrix4f(transform).invert().transformPosition(new Vector3f(eye));
+            scale*=FmumSightPicture.pupilDistance(model,type.modelScale,localEye);
             if (FmumActionPose.scalar(model, "relativeReticleSize", 0) != 0 && type.fovZoomLevels.length > 0) {
                 int step = Math.clamp(sight.node().zoomStep, 0, type.fovZoomLevels.length - 1);
                 scale *= type.fovZoomLevels[0] / Math.max(.001F, type.fovZoomLevels[step]);
@@ -204,18 +243,23 @@ public final class ScopeReticleRenderer {
                     // Flatten only the eye-facing plate; projecting the rear and side faces too
                     // would superimpose multiple copies of its translucent texture on the lens.
                     if (quad.nx() >= -.001F) continue;
-                    var polygon = new ArrayList<Projected>();
-                    for (int i = 0; i < quad.positions().length; i++) {
-                        float[] p = quad.positions()[i], uv = quad.uvs()[i];
-                        Vector3f vertex = transform.transformDirection(new Vector3f(p[0], p[1] * scale, p[2] * scale)).add(hit);
-                        float[] projected = project(vertex, eye, scopeFov);
-                        if (projected == null) { polygon.clear(); break; }
-                        float[] authored = authoredUv(glass, projected[0], projected[1]);
-                        polygon.add(new Projected(authored[0], authored[1], uv[0], uv[1]));
+                    var rays=new Vector3f[quad.positions().length];
+                    boolean visible=true;
+                    for(int i=0;i<rays.length;i++) {
+                        float[] p=quad.positions()[i];
+                        var vertex=transform.transformDirection(new Vector3f(p[0],p[1]*scale,p[2]*scale)).add(hit);
+                        rays[i]=lensRay(vertex,scopeToEye,handProjection,lensFromClip,scopeFov);
+                        if(rays[i]==null){visible=false;break;}
                     }
-                    if (polygon.size() < 3) continue;
+                    if(!visible)continue;
                     for (var lensQuad : glass.quads) {
                         if (lensQuad.nx() >= -.9F) continue;
+                        var polygon=new ArrayList<Projected>();
+                        for(int i=0;i<rays.length;i++) {
+                            float[] authored=glassUv(lensQuad,lensEye,rays[i]),uv=quad.uvs()[i];
+                            if(authored==null){polygon.clear();break;}
+                            polygon.add(new Projected(authored[0],authored[1],uv[0],uv[1]));
+                        }
                         var clipped = clip(polygon, lensQuad.uvs());
                         if (clipped.isEmpty()) continue;
                         for (int i = 1; i + 1 < clipped.size(); i++) {

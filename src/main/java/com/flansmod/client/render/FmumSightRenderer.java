@@ -12,7 +12,6 @@ import net.minecraft.client.renderer.*;
 import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
-import org.joml.Vector4f;
 import java.util.*;
 
 /** Aperture-tested reticles on the pack's actual sight geometry. */
@@ -31,22 +30,23 @@ public final class FmumSightRenderer {
 		var selected=GunSightState.scopeSight(view);
 		boolean active=selected!=null && selected.node()==node && !at.isFoldedVariant();
 		float ads=AimState.blend(Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true));
-		if(scope) {renderLens(pose,buffers,at,view,sightRig,active,ads,overlay,mirrored);return;}
+		if(scope) {renderLens(pose,buffers,at,view,sightRig,toEye,active,ads,overlay,mirrored);return;}
 		if(at.isFoldedVariant())return;
 		// The selected magnifier composites the whole coaxial group's reticles into its lens.
 		var group=GunSightState.selectedGroup(view);
-		if(selected!=null && ads>.9F && group!=null && group.sights().stream().anyMatch(s->s.node()==node))return;
-		renderDot(pose,buffers,at,node,sightRig,eye,pupil,overlay,mirrored);
+		if(selected!=null && ads>.95F && ScopeWorldTexture.available() && group!=null
+				&& group.sights().stream().anyMatch(s->s.node()==node))return;
+		renderDot(pose,buffers,at,node,sightRig,eye,pupil,ads,overlay,mirrored);
 	}
 	private static void renderLens(PoseStack pose,MultiBufferSource buffers,AttachmentType at,
-			GunType view,BakedRig sightRig,boolean active,float ads,int overlay,boolean mirrored) {
+			GunType view,BakedRig sightRig,Matrix4f toEye,boolean active,float ads,int overlay,boolean mirrored) {
 		var glass=ModelCache.rigForReference(at.scopeGlassModel,1F);
 		if(glass==null || glass.quads.isEmpty())return;
 		var model=sightRig.animation;
 		Vector3f center=FmumSightPicture.vector(model,"pupilRefCenter",0,0,0).mul(at.modelScale);
 		Vector3f scale=FmumSightPicture.vector(model,"scopeGlassModelScale",1,1,1).mul(at.modelScale);
 		pose.pushPose();pose.translate(center.x,center.y,center.z);pose.scale(scale.x,scale.y,scale.z);
-		if(active && ads>.95F) {
+		if(active && ads>.95F && ScopeWorldTexture.available()) {
 			// Sample the pre-hand world copy at each vertex's own screen position. The world pass is
 			// already at the magnified FOV, so this is a 1:1 window onto it: no crop, no stretch, and
 			// it opens the closed tube EFT's sight meshes are modelled as.
@@ -54,16 +54,19 @@ public final class FmumSightRenderer {
 				Matrix4f clip=new Matrix4f(RenderSystem.getProjectionMatrix())
 						.mul(RenderSystem.getModelViewMatrix()).mul(pose.last().pose());
 				var buffer=buffers.getBuffer(ScopeWorldTexture.LENS);
-				for(var quad:glass.quads)for(int j=0;j<4;j++) {
-					int i=mirrored?3-j:j;
-					float[] p=quad.positions()[i];
-					Vector4f c=clip.transform(new Vector4f(p[0],p[1],p[2],1F));
-					if(!(c.w>1e-6F))continue;
-					buffer.addVertex(pose.last().pose(),p[0],p[1],p[2])
-							.setUv(c.x/c.w*.5F+.5F,c.y/c.w*.5F+.5F).setColor(1F,1F,1F,1F);
+				for(var quad:glass.quads) {
+					float[][] uv=FmumSightPicture.screenQuad(clip,quad.positions());
+					if(uv==null)continue;
+					for(int j=0;j<4;j++) {
+						int i=mirrored?3-j:j;
+						float[] p=quad.positions()[i];
+						buffer.addVertex(pose.last().pose(),p[0],p[1],p[2])
+								.setUv(uv[i][0],uv[i][1]).setColor(1F,1F,1F,1F);
+					}
 				}
 			}
-			ScopeReticleRenderer.render(pose,buffers,view,GunSightState.scopeSight(view),sightRig,glass,ScopeMagnification.scopeFov(),overlay,mirrored);
+			ScopeReticleRenderer.render(pose,buffers,view,GunSightState.scopeSight(view),sightRig,glass,
+					toEye,new Matrix4f(RenderSystem.getProjectionMatrix()),ScopeMagnification.scopeFov(),overlay,mirrored);
 		} else {
 			// 1.7.10 drew an unbound scope's glass black (DefaultBlack), never clear. That also
 			// covers the hip-fire case, where the magnified world must not leak through the tube.
@@ -72,17 +75,15 @@ public final class FmumSightRenderer {
 		}
 		pose.popPose();
 	}
-	private static void renderDot(PoseStack pose,MultiBufferSource buffers,AttachmentType at,
+	public static void renderDot(PoseStack pose,MultiBufferSource buffers,AttachmentType at,
 			ModifiableType.DefaultAttachment node,BakedRig sightRig,Vector3f eye,float pupil,
-			int overlay,boolean mirrored) {
+			float ads,int overlay,boolean mirrored) {
 		if(at.lightStuffModel==null || at.lightStuffModel.isBlank() || at.lightStuffModel.equalsIgnoreCase("none"))return;
 		var model=sightRig.animation;
 		float[][] border=model.fmumVectorArrays.get("reticleBorder");
 		if(border==null || border.length<3)return; // An unbounded dot would float outside the lens.
 		float[][] far=model.fmumVectorArrays.getOrDefault("reticleAt",new float[][]{{0,0,0}});
-		float ads=AimState.blend(Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true));
-		ResourceLocation skin=at.lightStuffTexture==null?Textures.of(at.texture,false)
-				:Textures.of(at.lightStuffTexture+Math.clamp(node.dotFrame,0,Math.max(0,at.lightTextureCount-1)),false);
+		ResourceLocation skin=Textures.forReticle(at,node.dotFrame);
 		if(skin==null)return;
 		var dot=ModelCache.rigForReference(at.lightStuffModel,1F,skin);if(dot==null || dot.quads.isEmpty())return;
 		Vector3f normal=FmumSightPicture.vector(model,"normalVecOfDotBorder",1,0,0);
@@ -99,7 +100,7 @@ public final class FmumSightRenderer {
 			RigRenderer.renderPart(pose,buffer,quads,LightTexture.FULL_BRIGHT,overlay,1,1,1,1,mirrored);
 			pose.popPose();
 		}
-		reportReticle(at,node,skin,border,far.length,hits,pupil,shrink,eye,ads);
+		if(com.flansmod.common.FlansMod.LOGGER.isDebugEnabled())reportReticle(at,node,skin,border,far.length,hits,pupil,shrink,eye,ads);
 	}
 
 	/**
@@ -116,12 +117,11 @@ public final class FmumSightRenderer {
 		float cx=0F,cy=0F,cz=0F;
 		for(float[] point:border) {cx+=point[0];cy+=point[1];cz+=point[2];}
 		cx/=border.length;cy/=border.length;cz/=border.length;
-		String state=String.format(java.util.Locale.ROOT,"%s hits=%d dx=%.4f dy=%.4f dz=%.4f",
-				ads>.9F?"ads":"hip",hits,eye.x-cx,eye.y-cy,eye.z-cz);
+		String state=(ads>.95F?"ads":"hip")+" hits="+hits+" skin="+skin+" frame="+node.dotFrame;
 		if(state.equals(RETICLE_STATE.put(at.shortName,state)))return;
 		var mc=Minecraft.getInstance();
 		boolean present=mc.getResourceManager()!=null && mc.getResourceManager().getResource(skin).isPresent();
-		com.flansmod.common.FlansMod.LOGGER.info("[Reticle] "+at.shortName
+		com.flansmod.common.FlansMod.LOGGER.debug("[Reticle] "+at.shortName
 				+" skin="+skin+(present?" present":" MISSING")
 				+" border="+border.length+"pts far="+farPoints+"pts hits="+hits
 				+String.format(java.util.Locale.ROOT," pupil=%.4f shrink=%.4f ads=%.2f",pupil,shrink,ads)

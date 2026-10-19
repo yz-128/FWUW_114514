@@ -71,7 +71,7 @@ public final class VerifyArmourRendering {
             for(int layer=1;layer<=2;layer++){
                 var alias=ResourceLocation.fromNamespaceAndPath("flansmod","textures/models/armor/legacy/"+registry+"_layer_"+layer+".png");
                 var supplier=generated.getResource(PackType.CLIENT_RESOURCES,alias);check(supplier!=null,"modern armour texture alias exists");
-                byte[] wanted=ContentPackIndex.current().find("assets/"+texture.getNamespace()+"/"+texture.getPath(),true).orElseThrow().readAllBytes();
+                byte[] wanted=ArmourResources.source(armour).orElseThrow().entry().readAllBytes();
                 try(var input=supplier.get()){check(Arrays.equals(input.readAllBytes(),wanted),"alias preserves original pixels and layer selection");}
             }
             faces+=rig.quads.size();armours++;

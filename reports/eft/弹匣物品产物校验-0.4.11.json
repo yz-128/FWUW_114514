@@ -1,0 +1,28 @@
+{
+  "Version": "0.4.11",
+  "Jar": "E:\\JAVAMCMODGJ\\FLAN 移植i\\flanmod-template-1.21.1\\build\\libs\\flansmod-0.4.11.jar",
+  "Bytes": 672753,
+  "SHA256": "9E761138E5E0425A03BB1C3EC5406B77554EB9C1976D0C1DF32F1975E5494146",
+  "JavaClassMajor": 65,
+  "BundledIcon": true,
+  "EnabledPackFiles": 5369,
+  "ChangedPackFiles": 0,
+  "RegressionGroups": 23,
+  "MagazineVerification": "PASS: 54940 checks; multi-calibre and six-value Ammo, shaped/shapeless definitions, AP/JHP/case storage, mixed chamber/manual case extraction, 21 production content draws / 54216 vertices; no world, GPU or input.",
+  "Audit": {
+    "jar": "flansmod-0.4.11.jar",
+    "magazineDefinitions": 10,
+    "registeredMagazines": 8,
+    "registeredRoundsAndCases": 15,
+    "firearmDefinitions": 10,
+    "registeredFirearms": 8,
+    "relatedDefinitions": 95,
+    "compressionStrokes": 2190,
+    "consumedRounds": 2190,
+    "nbtRoundTrips": 51,
+    "completeGunFeedCycles": 17,
+    "completeGunFeedRounds": 720,
+    "findingRowsNotDistinctBugs": 0
+  },
+  "Backup": "E:\\JAVAMCMODGJ\\FLAN 移植i\\BACKUP_flan_before_556_fix_20261019_184244"
+}

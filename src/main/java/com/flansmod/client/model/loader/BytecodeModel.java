@@ -124,8 +124,23 @@ public final class BytecodeModel
 		// statement from the geometry — sometimes before, sometimes after. Now that every method
 		// has been read, each element can be handed the pivot of the renderer it belongs to.
 		model.applyPivots();
+		// The original EFT generation used division/dot names; reforged packs renamed the
+		// same optical contract to reticle/pupil. Keep canonical fields authoritative.
+		opticalAliases(model);
 
 		return model;
+	}
+
+	private static void opticalAliases(Model model) {
+		alias(model.fmumVectorArrays, "reticleBorder", "sightDotBorder");
+		alias(model.fmumVectorArrays, "reticleAt", "dotAt");
+		alias(model.fmumPose, "pupilRefCenter", "scopeGlassCenter");
+		alias(model.fmumPose, "normalVecOfDotBorder", "normalVecOfSightDotBorder");
+		alias(model.fmumScalars, "reticleScale", "divisionScale");
+		alias(model.fmumScalars, "relativeReticleSize", "relativeDivisionSize");
+	}
+	private static <T> void alias(java.util.Map<String,T> fields,String canonical,String legacy) {
+		if(!fields.containsKey(canonical) && fields.containsKey(legacy)) fields.put(canonical,fields.get(legacy));
 	}
 
 	/** The fields declared as {@code ModelRendererTurbo[]}. */
@@ -594,7 +609,7 @@ public final class BytecodeModel
 			case "fancyStance" -> model.fancyStance = value != 0F;
 			// The sight's reticle plate is scaled by this times the pupil distance. It is a
 			// plain field rather than a named setting, so it only lives in the scalar map that
-			// FmumActionPose reads; the renderer falls back to 0.4 when a model omits it.
+			// FmumActionPose reads; the renderer uses ModelAtSight's default 1 when omitted.
 			case "reticleScale" -> { }
 			default -> { return false; }
 		}
@@ -608,6 +623,7 @@ public final class BytecodeModel
 		for(AbstractInsnNode instruction : method.instructions) {
 			if(instruction instanceof FieldInsnNode field && field.getOpcode()==Opcodes.PUTFIELD
 					&& field.desc.startsWith("[L") && field.desc.endsWith("Vector3f;")) {
+				captureVectorArrayReferences(model,field);
 				var array=field.getPrevious();
 				if(array instanceof org.objectweb.asm.tree.TypeInsnNode && array.getOpcode()==Opcodes.ANEWARRAY) {
 					Integer count=intOf(array.getPrevious());
@@ -639,6 +655,45 @@ public final class BytecodeModel
 			}
 		}
 		captureArrayElementSetters(model,method);
+	}
+
+	/** e.g. the X-15 drum's second seating array is { first[0], first[1], first[2] }. */
+	private static void captureVectorArrayReferences(Model model,FieldInsnNode destination) {
+		var previous=destination.getPrevious();
+		if(previous instanceof FieldInsnNode source && source.getOpcode()==Opcodes.GETFIELD
+				&& source.desc.equals(destination.desc)) {
+			var values=model.fmumVectorArrays.get(source.name);
+			if(values!=null) model.fmumVectorArrays.put(destination.name,values);
+			return;
+		}
+		if(previous==null || previous.getOpcode()!=Opcodes.AASTORE) return;
+		var entries=new java.util.HashMap<Integer,float[]>();
+		for(int guard=0;previous!=null && guard++<256;previous=previous.getPrevious()) {
+			if(previous.getOpcode()==Opcodes.AASTORE) {
+				var load=previous.getPrevious();
+				if(load!=null && load.getOpcode()==Opcodes.AALOAD) {
+					Integer sourceIndex=intOf(load.getPrevious());
+					var access=load.getPrevious()==null?null:load.getPrevious().getPrevious();
+					if(access instanceof FieldInsnNode source && source.getOpcode()==Opcodes.GETFIELD
+							&& source.desc.equals(destination.desc) && access.getPrevious()!=null) {
+						Integer index=intOf(access.getPrevious().getPrevious());
+						var values=model.fmumVectorArrays.get(source.name);
+						if(index!=null && sourceIndex!=null && values!=null && sourceIndex>=0 && sourceIndex<values.length)
+							entries.put(index,values[sourceIndex]);
+					}
+				}
+			}
+			if(previous instanceof org.objectweb.asm.tree.TypeInsnNode array && array.getOpcode()==Opcodes.ANEWARRAY) {
+				Integer count=intOf(array.getPrevious());
+				if(count!=null && count>0 && count<=256 && entries.size()==count) {
+					float[][] values=new float[count][];
+					for(int i=0;i<count;i++) if(!entries.containsKey(i)) return; else values[i]=entries.get(i);
+					model.fmumVectorArrays.put(destination.name,values);
+				}
+				return;
+			}
+			if(previous.getOpcode()==Opcodes.PUTFIELD) return;
+		}
 	}
 
 	/**
