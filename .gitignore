@@ -43,3 +43,8 @@ repo/
 /logs/
 /*.args
 *.log
+
+### Local planning / handoff notes ###
+# Kept on disk for continuity between sessions; not part of the published tree.
+/工作计划表-*.md
+/项目交接-*.md
