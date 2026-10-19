@@ -45,9 +45,11 @@ base {
 // Mojang ships Java 21 to end users in 1.21.1, so mods should target Java 21.
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-// The format-neutral pack engine lives in the new standalone project. Compile the
-// same JDK-only sources into this compatibility build; no extra runtime mod is needed.
-sourceSets.main.java.srcDir('../PackArms-1.21.1/pack-core/src/main/java')
+// The format-neutral pack engine from PackArms is compiled into this build so no extra runtime
+// mod is needed. It is vendored under src/main/java/dev/packarms/core rather than referenced
+// through '../PackArms-1.21.1/...': the published repository contains only this project, and an
+// extra source directory outside the checkout made every CI build fail on a missing
+// dev.packarms.core package. See the README beside those sources for how to re-sync them.
 
 neoForge {
     version = project.neo_version
