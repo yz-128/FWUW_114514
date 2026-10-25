@@ -68,7 +68,43 @@ public final class VerifyMagazineData {
 		reequipRegression(gun,mag,gunItem,magItem,bulletItem);
 		magazineOnlyRegression(gun,gunItem,bulletItem);
 		mixedMagazineRegression(pack,gun,mag,gunItem,magItem,bulletItem);
+		standardFlanAmmoRegression(bulletItem);
     }
+	/** Standard Flan packs use Ammo/RoundsPerItem, without FMUM's Mag/MagType layer. */
+	static void standardFlanAmmoRegression(Item foreignItem) {
+		var ammoFile=new TypeFile(EnumType.bullet,"standard_flan_ammo",false);
+		ammoFile.lines.addAll(java.util.List.of("ShortName standard_flan_ammo","RoundsPerItem 5"));
+		var ammo=new BulletType(ammoFile);ammo.read(ammoFile);
+		var ammoItem=register(ammo,"fixture_standard_flan_ammo");
+		var gunFile=new TypeFile(EnumType.gun,"standard_flan_gun",false);
+		gunFile.lines.addAll(java.util.List.of("ShortName standard_flan_gun","Ammo standard_flan_ammo","ReloadTime 20"));
+		var gun=new GunType(gunFile);gun.read(gunFile);gun.ammo.add(ammo);
+		var gunItem=register(gun,"fixture_standard_flan_gun");
+		check(gun.magazineNames.isEmpty()&&!gun.allowDirectAmmoLoading,"standard Flan data does not declare FMUM detachable magazines or port-only opt-in");
+		var inventory=new net.minecraft.world.entity.player.Inventory(null);
+		inventory.setItem(0,new ItemStack(ammoItem,2));
+		var held=new ItemStack(gunItem);var returned=new java.util.ArrayList<ItemStack>();
+		check(GunMagazine.findAmmo(inventory,gun)==inventory.getItem(0),"ordinary Ammo definition accepts its declared five-round item without a Mag line");
+		check(GunMagazine.reload(held,gun,inventory,false,returned::add),"standard Flan reload loads one actual ammunition item");
+		check(inventory.getItem(0).getCount()==1&&returned.isEmpty(),"standard reload consumes exactly one item and returns nothing from empty gun");
+		check(GunMagazine.findLoaded(held,gun)==0&&GunFiring.liveRound(held,gun,0)==ammo,"stored standard Flan ammo is available to the actual firing selector");
+		for(int i=0;i<3;i++) {
+			var loaded=GunMagazine.get(held,gun,0);check(GunMagazine.consumeRound(loaded),"standard ammo shot "+i);GunMagazine.set(held,gun,0,loaded);
+		}
+		check(GunMagazine.roundsRemaining(GunMagazine.get(held,gun,0))==2,"three shots leave two real uses in the ammunition item");
+		check(!GunMagazine.reload(held,gun,inventory,false,returned::add),"automatic reload does not replace usable standard ammo");
+		check(GunMagazine.reload(held,gun,inventory,true,returned::add),"manual reload exchanges standard Flan partially spent ammunition");
+		check(inventory.getItem(0).isEmpty()&&returned.size()==1&&GunMagazine.roundsRemaining(returned.getFirst())==2,"manual reload returns exactly the two unused rounds");
+		int shots=0;
+		while(GunMagazine.findLoaded(held,gun)>=0) {
+			var loaded=GunMagazine.get(held,gun,0);check(GunMagazine.consumeRound(loaded),"standard second ammunition item can fire");GunMagazine.set(held,gun,0,loaded);shots++;
+		}
+		check(shots==5&&3+shots+GunMagazine.roundsRemaining(returned.getFirst())==10,"two five-round items conserve all ten rounds across shots and tactical reload");
+		var before=held.copy();inventory.setItem(0,new ItemStack(foreignItem,10));
+		check(GunMagazine.findAmmo(inventory,gun).isEmpty()&&!GunMagazine.reload(held,gun,inventory,true,returned::add),"no-Mag fallback still rejects ammunition absent from the gun's Ammo list");
+		check(ItemStack.matches(before,held)&&inventory.getItem(0).getCount()==10,"wrong standard ammunition leaves gun and reserve unchanged");
+		System.out.println("PASS: standard Flan Ammo/RoundsPerItem format reloads and fires without FMUM Mag; partial return and ten-round conservation; wrong ammunition rejected; EFT magazine-only policy remains covered separately.");
+	}
 	static void reequipRegression(GunType gun,GunType mag,Item gunItem,Item magItem,Item bulletItem) {
 		var full=new ItemStack(magItem);GunMagazine.set(full,mag,0,new ItemStack(bulletItem,30));
 		var held=new ItemStack(gunItem);GunMagazine.set(held,gun,0,full);

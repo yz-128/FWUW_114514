@@ -111,6 +111,7 @@ public final class ClientAssetPrewarmer {
             ModelCache.prewarm(type);
             if("sight".equalsIgnoreCase(type.itsType)) {
                 ModelCache.prewarmReference(type.scopeGlassModel,1F,null,true);
+                ModelCache.prewarmReference(type.blackMaskModel,1F,Textures.forReticle(type,node.dotFrame),true);
                 ModelCache.prewarmReference(type.lightStuffModel,1F,Textures.forReticle(type,node.dotFrame),true);
             }
             String texture = type.flashTextureName == null ? gun.flashTexture : type.flashTextureName;

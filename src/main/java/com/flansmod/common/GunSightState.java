@@ -15,6 +15,9 @@ public final class GunSightState {
     public static final int NEXT_GROUP=0, ZOOM=1, DOT=2, TOGGLE=3;
     public static final int FOLD_TICKS=12;
     private static final float LINE_EPSILON=0.00001F, ROLL_EPSILON=.001F;
+    // G33Enabled and EOTech552 differ by 0.000625 gun-local blocks after their authored
+    // model scales. Only a deployed cosight sharing this rail may bridge that subpixel gap.
+    private static final float COSIGHT_LINE_EPSILON=.001F;
     public record Sight(int[] path,AttachmentType type,DefaultAttachment node,float x,float y,float z,float roll) { }
     public record Group(List<Sight> sights,Sight aiming) { }
     private static final Map<GunType,List<Group>> GROUPS=Collections.synchronizedMap(new WeakHashMap<>());
@@ -33,12 +36,37 @@ public final class GunSightState {
             // Original setSightsAtForGun appends matching sights from the end, then sorts X descending.
             for(int i=remaining.size();--i>=0;)if(sameLine(first,remaining.get(i)))group.add(remaining.remove(i));
             group.sort(Comparator.comparingDouble(Sight::x).reversed());
-            result.add(new Group(List.copyOf(group),group.getFirst()));
+            result.add(new Group(List.copyOf(group),group.stream().filter(s->!s.type.isFoldedVariant()).findFirst().orElse(group.getFirst())));
         }
         var value=List.copyOf(result);if(cacheable)GROUPS.put(view,value);return value;
     }
     public static Group selectedGroup(GunType view) {
-        var groups=groups(view);return groups.isEmpty()?null:groups.get(Math.clamp(view.selectedSightGroup,0,groups.size()-1));
+        var groups=groups(view);int index=selectedIndex(view,groups);if(index<0)return null;
+        var selected=groups.get(index);var combined=new ArrayList<>(selected.sights);
+        for(int i=0;i<groups.size();i++)if(i!=index && sameCoSightLine(selected.aiming,groups.get(i).aiming))combined.addAll(groups.get(i).sights);
+        if(combined.size()==selected.sights.size())return selected;
+        combined.sort(Comparator.comparingDouble(Sight::x).reversed());
+        // Raw group indices stay stable for existing saves. Optically, a deployed magnifier
+        // and the forward holographic sight form one line, aimed through the rear glass.
+        var aiming=combined.stream().filter(s->s.type.isCoSight() && usableScope(s)).findFirst().orElse(selected.aiming);
+        return new Group(List.copyOf(combined),aiming);
+    }
+    /** Keep raw indices for existing stacks, but never move the eye onto a stowed optic. */
+    private static int selectedIndex(GunType view,List<Group> groups) {
+        if(groups.isEmpty())return -1;
+        int index=Math.clamp(view.selectedSightGroup,0,groups.size()-1);
+        var aiming=groups.get(index).aiming;
+        if(!aiming.type.isFoldedVariant())return index;
+        var shadow=AttachmentType.getAttachment(aiming.type.shadowType);
+        if(shadow!=null) {
+            var deployed=shadowPoint(aiming,shadow);
+            for(int i=0;i<groups.size();i++) {
+                var candidate=groups.get(i).aiming;
+                if(!candidate.type.isFoldedVariant() && (sameLine(deployed,candidate) || sameCoSightLine(deployed,candidate)))return i;
+            }
+        }
+        for(int i=0;i<groups.size();i++)if(!groups.get(i).aiming.type.isFoldedVariant())return i;
+        return -1;
     }
     public static Sight selectedSight(GunType view) {var group=selectedGroup(view);return group==null?null:group.aiming;}
     /** A folded co-sight is still enumerated for legacy ordering, but never contributes zoom. */
@@ -47,14 +75,32 @@ public final class GunSightState {
         for(var sight:group.sights)if(usableScope(sight))return sight;
         return null;
     }
-    public static boolean usableScope(Sight sight) {
-        String glass=sight.type.scopeGlassModel;
-        return !sight.type.isFoldedVariant() && glass!=null && !glass.isBlank()
-                && !glass.equalsIgnoreCase("none") && !glass.equalsIgnoreCase("null");
+    public static boolean usableScope(Sight sight) {return !sight.type.isFoldedVariant() && hasGlass(sight.type);}
+    /** A definition that actually declares a glass model is an optic you can look through. */
+    static boolean hasGlass(AttachmentType type) {
+        var glass=type==null?null:type.scopeGlassModel;
+        return glass!=null && !glass.isBlank() && !glass.equalsIgnoreCase("none") && !glass.equalsIgnoreCase("null");
     }
     private static boolean sameLine(Sight a,Sight b) {
         float roll=(a.roll-b.roll)%360F;if(roll>180)roll-=360;if(roll< -180)roll+=360;
         return Math.abs(a.y-b.y)<=LINE_EPSILON && Math.abs(a.z-b.z)<=LINE_EPSILON && Math.abs(roll)<=ROLL_EPSILON;
+    }
+    private static boolean sameCoSightLine(Sight a,Sight b) {
+        if(a.type.isFoldedVariant() || b.type.isFoldedVariant() || !(a.type.isCoSight() || b.type.isCoSight()) || !sameMount(a,b))return false;
+        float roll=(a.roll-b.roll)%360F;if(roll>180)roll-=360;if(roll< -180)roll+=360;
+        return Math.abs(a.y-b.y)<=COSIGHT_LINE_EPSILON && Math.abs(a.z-b.z)<=COSIGHT_LINE_EPSILON && Math.abs(roll)<=ROLL_EPSILON;
+    }
+    private static int aimingLineCount(List<Group> groups) {
+        var lines=new ArrayList<Sight>();
+        for(var group:groups)if(!group.aiming.type.isFoldedVariant()
+                && lines.stream().noneMatch(s->sameLine(s,group.aiming) || sameCoSightLine(s,group.aiming)))lines.add(group.aiming);
+        return lines.size();
+    }
+    /** Two sights sharing a parent and a slot are the same physical position on one mount. */
+    private static boolean sameMount(Sight a,Sight b) {
+        if(a.path.length!=b.path.length || a.path.length<2)return false;
+        for(int i=0;i<a.path.length-2;i++)if(a.path[i]!=b.path[i])return false;
+        return a.path[a.path.length-2]==b.path[b.path.length-2];
     }
     private static void collect(ModifiableType owner,List<DefaultAttachment> nodes,int[] parent,float x,float y,float z,
                                 float roll,List<Sight> out,boolean allNodes) {
@@ -68,7 +114,7 @@ public final class GunSightState {
                 var mount=owner.slots[slot];float nx=x+mount.x+node.pos;
                 float ny=y+mount.y*cos-mount.z*sin,nz=z+mount.y*sin+mount.z*cos,nr=roll+mount.rotate;
                 var path=Arrays.copyOf(parent,parent.length+2);path[parent.length]=slot;path[parent.length+1]=index;
-                if(allNodes || "sight".equalsIgnoreCase(type.itsType)) {
+                if(allNodes || type.isAimingSight()) {
                     float rs=(float)Math.sin(Math.toRadians(nr)),rc=(float)Math.cos(Math.toRadians(nr));
                     out.add(new Sight(path,type,node,nx,ny+type.aimCenterY*rc-type.aimCenterZ*rs,
                             nz+type.aimCenterY*rs+type.aimCenterZ*rc,nr+type.aimCenterX));
@@ -91,10 +137,14 @@ public final class GunSightState {
         if(group!=null) {
             for(var sight:group.sights)if(sight.type.isCoSight() && AttachmentType.getAttachment(sight.type.shadowType)!=null)result.add(sight);
             if(!result.isEmpty())return result;
-            // A folded magnifier sits off the active sight line. Compare its UNFOLDED centre.
-            for(var sight:all)if(sight.type.isCoSight() && sight.type.isFoldedVariant()) {
+            // A magnifier in EITHER state can sit off the aimed line when its centre is not
+            // pixel-collinear with the partner. The pack's declared cosight pair on the same mount
+            // is the target; exact collinearity is only the precise fast path.
+            for(var sight:all)if(sight.type.isCoSight()) {
                 var shadow=AttachmentType.getAttachment(sight.type.shadowType);
-                if(shadow!=null && sameLine(group.aiming,shadowPoint(sight,shadow)))result.add(sight);
+                if(shadow==null)continue;
+                if(sight.type.isFoldedVariant() && sameLine(group.aiming,shadowPoint(sight,shadow))) {result.add(sight);continue;}
+                if(sameMount(group.aiming,sight))result.add(sight);
             }
             if(!result.isEmpty())return result;
         }
@@ -112,7 +162,7 @@ public final class GunSightState {
     public static boolean canChange(GunType view,int operation) {
         if(view==null)return false;
         return switch(operation) {
-            case NEXT_GROUP -> groups(view).size()>1;
+            case NEXT_GROUP -> aimingLineCount(groups(view))>1;
             case ZOOM -> {var sight=scopeSight(view);yield sight!=null && sight.type.fovZoomLevels.length>1;}
             case DOT -> {var group=selectedGroup(view);yield group!=null && group.sights.stream().anyMatch(s->!s.type.isFoldedVariant() && s.type.lightTextureCount>1);}
             case TOGGLE -> !toggleTargets(view).isEmpty();
@@ -128,7 +178,14 @@ public final class GunSightState {
         var tree=GunAttachments.copy(gun,GunAttachments.read(gun,stack));var view=gun.withAttachments(tree);
         view.selectedSightGroup=current.selectedSightGroup;
         int selected=view.selectedSightGroup;
-        if(operation==NEXT_GROUP)selected=(Math.clamp(selected,0,groups(view).size()-1)+1)%groups(view).size();
+        if(operation==NEXT_GROUP) {
+            var groups=groups(view);selected=selectedIndex(view,groups);
+            var currentSight=groups.get(selected).aiming;
+            for(int i=1;i<groups.size();i++) {
+                int next=(selected+i)%groups.size();var aiming=groups.get(next).aiming;
+                if(!aiming.type.isFoldedVariant() && !sameLine(currentSight,aiming) && !sameCoSightLine(currentSight,aiming)) {selected=next;break;}
+            }
+        }
         else if(operation==ZOOM) {var sight=scopeSight(view);sight.node.zoomStep=(sight.node.zoomStep+1)%sight.type.fovZoomLevels.length;}
         else if(operation==DOT) {
             for(var sight:selectedGroup(view).sights)if(!sight.type.isFoldedVariant() && sight.type.lightTextureCount>1)
@@ -150,7 +207,15 @@ public final class GunSightState {
             }
             var updated=gun.withAttachments(tree);var newGroups=groups(updated);selected=0;
             int[] referencePath=reference!=null?reference.path:targets.getFirst().path;
-            for(int i=0;i<newGroups.size();i++)if(newGroups.get(i).sights.stream().anyMatch(s->Arrays.equals(s.path,referencePath))){selected=i;break;}
+            // Flipping an optic UP means the eye now looks through it. Staying on the partner group
+            // that has no glass left the magnifier rendering its black "unbound scope" lens.
+            int[] scopePath=null;
+            for(var sight:targets) {
+                var shadow=AttachmentType.getAttachment(sight.type.shadowType);
+                if(hasGlass(shadow) && !shadow.isFoldedVariant()) {scopePath=sight.path;break;}
+            }
+            int[] wanted=scopePath!=null?scopePath:referencePath;
+            for(int i=0;i<newGroups.size();i++)if(newGroups.get(i).sights.stream().anyMatch(s->Arrays.equals(s.path,wanted))){selected=i;break;}
         }
         GunAttachments.writeSightState(stack,tree,selected);return true;
     }

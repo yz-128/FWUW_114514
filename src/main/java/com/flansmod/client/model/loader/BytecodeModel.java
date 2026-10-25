@@ -119,6 +119,7 @@ public final class BytecodeModel
 		for(MethodNode m : cn.methods)
 			if(m != init && m.instructions != null && m.instructions.size() > 0)
 				scan(m, cn, model, arrays, sheetX, sheetY);
+		for(MethodNode method:cn.methods)captureOpticalScalarChains(model,method);
 
 		// A pivot is a property of the renderer object, and the class sets it in a separate
 		// statement from the geometry — sometimes before, sometimes after. Now that every method
@@ -127,8 +128,157 @@ public final class BytecodeModel
 		// The original EFT generation used division/dot names; reforged packs renamed the
 		// same optical contract to reticle/pupil. Keep canonical fields authoritative.
 		opticalAliases(model);
+		captureEmissiveRender(cn, model);
 
 		return model;
+	}
+
+	/** Interpret only the small legacy render contract; geometry construction is never executed. */
+	private static void captureEmissiveRender(ClassNode cn, Model model)
+	{
+		for(MethodNode method : cn.methods)
+		{
+			if(!method.name.equals("render") || !method.desc.equals("(F)V")) continue;
+			boolean hasGlow = false;
+			for(var instruction : method.instructions)
+				if(instruction instanceof MethodInsnNode call &&
+						(call.name.equals("glowOn") || call.name.equals("glowOnStatic"))) hasGlow = true;
+			if(!hasGlow) return;
+			var profiles = new ArrayList<List<ModelGeometry.GlowDraw>>(256);
+			var normalProfiles = new ArrayList<List<ModelGeometry.GlowDraw>>(256);
+			var shared = new java.util.HashMap<MaterialProfile, MaterialProfile>();
+			try
+			{
+				for(int mode = 0; mode < 256; mode++)
+				{
+					var profile = shared.computeIfAbsent(emissiveProfile(cn, method, (byte)mode), value -> value);
+					profiles.add(profile.glow()); normalProfiles.add(profile.normal());
+				}
+				model.emissiveDrawsByMode = List.copyOf(profiles);
+				model.normalDrawsByMode = List.copyOf(normalProfiles);
+			}
+			catch(IllegalArgumentException unsupported)
+			{
+				model.emissiveRenderUnsupported = true;
+				model.emissiveDrawsByMode = List.of();
+				model.normalDrawsByMode = List.of();
+			}
+			return;
+		}
+	}
+
+	private static Object materialPop(List<Object> stack)
+	{
+		if(stack.isEmpty()) throw new IllegalArgumentException("Unsupported render stack");
+		return stack.removeLast();
+	}
+	private static int materialInt(List<Object> stack)
+	{
+		if(materialPop(stack) instanceof Integer value) return value;
+		throw new IllegalArgumentException("Nonconstant render argument");
+	}
+	private record MaterialProfile(List<ModelGeometry.GlowDraw> normal, List<ModelGeometry.GlowDraw> glow) { }
+	private static MaterialProfile emissiveProfile(ClassNode cn, MethodNode method, int mode)
+	{
+		var stack = new ArrayList<Object>();
+		var result = new ArrayList<ModelGeometry.GlowDraw>();
+		var normal = new ArrayList<ModelGeometry.GlowDraw>();
+		ModelGeometry.GlowLight light = null;
+		var instructions = method.instructions.toArray();
+		var labels = new java.util.IdentityHashMap<org.objectweb.asm.tree.LabelNode, Integer>();
+		for(int i = 0; i < instructions.length; i++)
+			if(instructions[i] instanceof org.objectweb.asm.tree.LabelNode label) labels.put(label, i);
+		int budget = 4096;
+		for(int pc = 0; pc < instructions.length && budget-- > 0; pc++)
+		{
+			var instruction = instructions[pc];
+			int op = instruction.getOpcode();
+			if(op < 0 || op == Opcodes.NOP) continue;
+			if(op == Opcodes.RETURN)
+			{
+				if(light != null || !stack.isEmpty()) throw new IllegalArgumentException("Unbalanced render/glow");
+				return new MaterialProfile(List.copyOf(normal), List.copyOf(result));
+			}
+			if(instruction instanceof org.objectweb.asm.tree.VarInsnNode variable)
+			{
+				if(op == Opcodes.ALOAD && variable.var == 0) stack.add("this");
+				else if(op == Opcodes.FLOAD && variable.var == 1) stack.add("scale");
+				else throw new IllegalArgumentException("Unsupported render local");
+				continue;
+			}
+			if(instruction instanceof FieldInsnNode field && op == Opcodes.GETFIELD)
+			{
+				if(!"this".equals(materialPop(stack)) || !field.desc.startsWith("[L") || !field.desc.contains("ModelRendererTurbo"))
+					throw new IllegalArgumentException("Unsupported render field");
+				stack.add(field.name); continue;
+			}
+			if(instruction instanceof org.objectweb.asm.tree.JumpInsnNode jump)
+			{
+				boolean take;
+				if(op == Opcodes.GOTO) take = true;
+				else if(op >= Opcodes.IFEQ && op <= Opcodes.IFLE)
+				{
+					int value = materialInt(stack);
+					take = switch(op) {
+						case Opcodes.IFEQ -> value == 0; case Opcodes.IFNE -> value != 0;
+						case Opcodes.IFLT -> value < 0; case Opcodes.IFGE -> value >= 0;
+						case Opcodes.IFGT -> value > 0; default -> value <= 0;
+					};
+				}
+				else if(op >= Opcodes.IF_ICMPEQ && op <= Opcodes.IF_ICMPLE)
+				{
+					int right = materialInt(stack), left = materialInt(stack);
+					take = switch(op) {
+						case Opcodes.IF_ICMPEQ -> left == right; case Opcodes.IF_ICMPNE -> left != right;
+						case Opcodes.IF_ICMPLT -> left < right; case Opcodes.IF_ICMPGE -> left >= right;
+						case Opcodes.IF_ICMPGT -> left > right; default -> left <= right;
+					};
+				}
+				else throw new IllegalArgumentException("Unsupported render branch");
+				if(take) pc = labels.get(jump.label);
+				continue;
+			}
+			if(instruction instanceof MethodInsnNode call)
+			{
+				if(op != Opcodes.INVOKESTATIC || !(call.owner.equals(cn.name) || call.owner.startsWith("com/flansmod/client/model/Model")))
+					throw new IllegalArgumentException("Unsupported render call");
+				switch(call.name)
+				{
+					case "getFireModeNum" -> { if(!call.desc.equals("()B")) throw new IllegalArgumentException(); stack.add(mode); }
+					case "glowOn" -> {
+						int strength;
+						if(call.desc.equals("()V")) strength = 15;
+						else if(call.desc.equals("(I)V")) strength = materialInt(stack);
+						else throw new IllegalArgumentException();
+						if(light != null) throw new IllegalArgumentException("Nested glow");
+						light = new ModelGeometry.GlowLight(strength, false);
+					}
+					case "glowOnStatic" -> {
+						if(!call.desc.equals("()V") || light != null) throw new IllegalArgumentException();
+						light = new ModelGeometry.GlowLight(15, true);
+					}
+					case "glowOff" -> { if(!call.desc.equals("()V") || light == null) throw new IllegalArgumentException(); light = null; }
+					case "render", "partialRender" -> {
+						String arrayType = "[Lcom/flansmod/client/tmt/ModelRendererTurbo;";
+						boolean partial = call.name.equals("partialRender");
+						if(!call.desc.equals("(" + arrayType + (partial ? "IIF)V" : "F)V"))) throw new IllegalArgumentException();
+						if(!"scale".equals(materialPop(stack))) throw new IllegalArgumentException();
+						int end = partial ? materialInt(stack) : -1;
+						int start = partial ? materialInt(stack) : 0;
+						if(!(materialPop(stack) instanceof String field) || field.equals("this") || field.equals("scale"))
+							throw new IllegalArgumentException();
+						if(start < 0 || (partial && end < start)) throw new IllegalArgumentException();
+						(light == null ? normal : result).add(new ModelGeometry.GlowDraw(field, start, end, light));
+					}
+					default -> throw new IllegalArgumentException("Unsupported render helper");
+				}
+				continue;
+			}
+			Object constant = push(instruction);
+			if(constant instanceof Integer value) { stack.add(value); continue; }
+			throw new IllegalArgumentException("Unsupported render opcode " + op);
+		}
+		throw new IllegalArgumentException("Unterminated render or branch budget");
 	}
 
 	private static void opticalAliases(Model model) {
@@ -138,6 +288,20 @@ public final class BytecodeModel
 		alias(model.fmumPose, "normalVecOfDotBorder", "normalVecOfSightDotBorder");
 		alias(model.fmumScalars, "reticleScale", "divisionScale");
 		alias(model.fmumScalars, "relativeReticleSize", "relativeDivisionSize");
+	}
+	/** javac uses DUP_X1 for `maskY = maskZ = constant`; the second write has no fresh
+	 * constant push. Recover this optical-only pattern without changing geometry scanning. */
+	private static void captureOpticalScalarChains(Model model,MethodNode method) {
+		for(AbstractInsnNode instruction:method.instructions) {
+			if(instruction.getOpcode()!=Opcodes.DUP_X1)continue;
+			Object value=push(instruction.getPrevious());if(!(value instanceof Number))continue;
+			for(AbstractInsnNode next=instruction.getNext();next!=null;next=next.getNext()) {
+				if(next.getOpcode()==Opcodes.DUP_X1)continue;
+				if(!(next instanceof FieldInsnNode field) || field.getOpcode()!=Opcodes.PUTFIELD || !field.desc.equals("F"))break;
+				if(field.name.startsWith("scopeMask") || field.name.equals("minPupilDistance") || field.name.equals("pupilDistancePower"))
+					model.fmumScalars.put(field.name,num(value));
+			}
+		}
 	}
 	private static <T> void alias(java.util.Map<String,T> fields,String canonical,String legacy) {
 		if(!fields.containsKey(canonical) && fields.containsKey(legacy)) fields.put(canonical,fields.get(legacy));
@@ -299,7 +463,7 @@ public final class BytecodeModel
 				if(fi.getOpcode() == Opcodes.GETFIELD)
 				{
 					if(fi.desc.endsWith("Vector3f;") && (List.of("muzzleFlashPoint","barrelOrigin","chamberSmokeOri","caseOrigin",
-							"pupilRefCenter","scopeGlassModelScale","scopeObjectiveLensCenter","normalVecOfDotBorder").contains(fi.name) || fi.name.startsWith("caseEject"))) {
+							"laserFrom","pupilRefCenter","scopeGlassModelScale","scopeObjectiveLensCenter","normalVecOfDotBorder").contains(fi.name) || fi.name.startsWith("caseEject"))) {
 						effectVector=fi.name;consts.clear();continue;
 					}
 					if(arrays.contains(fi.name) || "[Lcom/flansmod/client/tmt/ModelRendererTurbo;".equals(fi.desc))
@@ -602,6 +766,11 @@ public final class BytecodeModel
 			case "rotateClipHorizontal" -> model.rotateClipHorizontal = value;
 			case "tiltClip" -> model.tiltClip = value;
 			case "numBulletsInReloadAnimation" -> model.numBulletsInReloadAnimation = value;
+			// numSwitchModel is usually written as switchModel.length / 3, so the last constant
+			// pushed before the putfield is the number of fire-mode states; the same value is the
+			// divisor RenderSwitch slices the array by.
+			case "numSwitchModel" -> model.switchModelGroups = (int) value;
+			case "numSlideSwitchModel" -> model.slideSwitchModelGroups = (int) value;
 			case "scopeIsOnSlide" -> model.scopeIsOnSlide = value != 0F;
 			case "scopeIsOnBreakAction" -> model.scopeIsOnBreakAction = value != 0F;
 			case "gripIsOnPump" -> model.gripIsOnPump = value != 0F;

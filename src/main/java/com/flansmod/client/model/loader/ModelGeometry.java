@@ -19,6 +19,20 @@ import java.util.Map;
  */
 public final class ModelGeometry
 {
+	/** Legacy lightmap operation, identified from glowOn/glowOnStatic calls, not mesh names. */
+	public record GlowLight(int strength, boolean absolute)
+	{
+		public int apply(int packedLight)
+		{
+			if(absolute) return 0xF000F0;
+			long increase = (long)strength * 16L;
+			int block = (int)Math.clamp((packedLight & 0xFFFFL) + increase, 0L, 240L);
+			int sky = (int)Math.clamp(((packedLight >>> 16) & 0xFFFFL) + increase, 0L, 240L);
+			return block | sky << 16;
+		}
+	}
+	/** Renderer range is [first,last); a negative last means the whole array. */
+	public record GlowDraw(String field, int first, int last, GlowLight light) { }
 	/** One {@code addShapeBox} / {@code addBox} / {@code addTrapezoid} call. */
 	public static final class Box
 	{
@@ -118,6 +132,12 @@ public final class ModelGeometry
 	/** A whole model. */
 	public static final class Model
 	{
+		/** Immutable profiles indexed by unsigned legacy fireModeNum byte, shared when equal. */
+		public List<List<GlowDraw>> emissiveDrawsByMode = List.of();
+		/** Ordinary draws from the same successfully interpreted render; GlowDraw.light is null. */
+		public List<List<GlowDraw>> normalDrawsByMode = List.of();
+		/** Unknown render bytecode is deliberately not guessed into an always-on light pass. */
+		public boolean emissiveRenderUnsupported;
 		/** The class name, e.g. {@code com.flansmod.client.model.mw.ModelAK47}. */
 		public String className = "";
 		/** The name without package or the {@code Model} prefix, for matching against a definition. */
@@ -140,6 +160,19 @@ public final class ModelGeometry
 		 * name as {@code Model Bullet} rather than shipping.</p>
 		 */
 		public float renderScale = 1F;
+
+		/**
+		 * {@code ModelGun.numSwitchModel} — how many {@code switchModel} renderers make up one
+		 * fire-mode state. The class normally computes it as {@code switchModel.length / 3}, so
+		 * what is recorded here is that divisor; 0 means the weapon has no selector.
+		 *
+		 * <p>1.7.10's {@code ModelGun.renderSwitch(fireModeNum, …)} draws only the slice
+		 * {@code [fireModeNum * numSwitchModel, +numSwitchModel)}, which is why a weapon shows one
+		 * selector position at a time instead of all of them at once.
+		 */
+		public int switchModelGroups;
+		/** {@code ModelGun.numSlideSwitchModel} — the same idea for a slide-mounted selector. */
+		public int slideSwitchModelGroups;
 
 		/**
 		 * Rotation points, keyed by {@code field#index}.

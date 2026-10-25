@@ -50,6 +50,7 @@ public final class RigRenderer
 								  boolean mirrored)
 	{
 		Matrix4f matrix = pose.last().pose();
+		RenderPerf.addRigQuads(quads.size());
 		for(BakedRig.Quad quad : quads)
 			emit(matrix, buffer, quad, light, overlay, red, green, blue, alpha, mirrored);
 	}
@@ -70,6 +71,7 @@ public final class RigRenderer
 							  boolean mirrored)
 	{
 		Matrix4f matrix = pose.last().pose();
+		RenderPerf.addRigQuads(rig.quads.size());
 
 		for(BakedRig.Quad quad : rig.quads)
 			emit(matrix, buffer, quad, light, overlay, red, green, blue, alpha, mirrored);

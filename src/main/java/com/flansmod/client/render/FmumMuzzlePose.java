@@ -27,29 +27,42 @@ public final class FmumMuzzlePose {
 		var before=new ArrayList<Mount>();var after=new ArrayList<Mount>();
 		collect(gun,gun.defaultAttachments,new Matrix4f(),before,after,0);
 		float fade=gun.muzzleFlashVanishConst;
-		AttachmentType selected=null;
-		// setGunStates accumulates every attachment's fade, then its children; last barrel/muzzle wins.
 		for(var node:before) {
 			fade*=node.type.muzzleFlashVanishConst;
-			if(muzzle(node.type))selected=node.type;
 		}
-		String reference=selected==null || selected.flashModelName==null?gun.flashModel:selected.flashModelName;
-		String texture=selected==null || selected.flashModelName==null || selected.flashTextureName==null
-				?gun.flashTexture:selected.flashTextureName;
-		int count=selected==null || selected.numFlashTexture<1?gun.numFlashTexture:selected.numFlashTexture;
+		AttachmentType selected=null;
 		float[] gunPoint=FmumActionPose.vector(model,"muzzleFlashPoint");
 		Matrix4f position=new Matrix4f().translate(gunPoint[0],gunPoint[1],gunPoint[2]);
 		boolean free=FmumActionPose.scalar(model,"flashFreeRotate",1F)!=0;
 		String anchor=gun.shortName;
-		// renderAttachments visits children first; the first outer muzzle/barrel consumes renderFlash.
+		// renderAttachments visits children first; the first outer muzzle/barrel owns the flash.
 		for(var node:after)if(muzzle(node.type)) {
 			var rig=ModelCache.rigFor(node.type,node.type.modelScale);
 			var at=rig==null?null:rig.animation;
 			float[] point=FmumActionPose.vector(at,"muzzleFlashPoint");
 			position=new Matrix4f(node.pose).translate(point[0]*node.type.modelScale,point[1]*node.type.modelScale,point[2]*node.type.modelScale);
-			free=FmumActionPose.scalar(at,"flashFreeRotate",1F)!=0;anchor=node.type.shortName;break;
+			free=FmumActionPose.scalar(at,"flashFreeRotate",1F)!=0;anchor=node.type.shortName;
+			selected=node.type;
+			break;
 		}
-		return new Flash(reference,texture,gun.muzzleFlashScale,fade,Math.max(1,count),position,free,anchor);
+		float scale=gun.muzzleFlashScale;
+		String reference=gun.flashModel;
+		String texture=gun.flashTexture;
+		int count=gun.numFlashTexture;
+		// Only a part that authors its own FlashModel overrides the gun's flash; an ordinary muzzle
+		// brake leaves the gun's model and scale alone.
+		if(selected!=null && selected.flashModelName!=null) {
+			// 1.7.10 folds the muzzle part's own flash settings in: a suppressor authors
+			// FlashModel <fade> <model> <texture> 0 <count>, and that zero scale means "no visible
+			// flash". Using only the gun's scale (as this port did) kept the full flash on suppressed
+			// weapons, which is what the recording showed.
+			scale=selected.muzzleFlashScale;
+			if(scale<=0F)return null;
+			reference=selected.flashModelName;
+			if(selected.flashTextureName!=null)texture=selected.flashTextureName;
+			if(selected.numFlashTexture>=1)count=selected.numFlashTexture;
+		}
+		return new Flash(reference,texture,scale,fade,Math.max(1,count),position,free,anchor);
 	}
 	public static Matrix4f smoke(GunType gun,Model model,boolean chamber) {
 		if(chamber) {

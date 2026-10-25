@@ -229,7 +229,7 @@ public final class GunMagazine
 		for(int i = 0; i < type.numAmmoItemsInGun; i++)
 		{
 			ItemStack loaded=get(gun,type,i);
-			if(type.itsType!=GunType.GunItsType.MAG && !type.allowDirectAmmoLoading
+			if(magazineOnlySupply(type)
 					&& !(com.flansmod.common.types.InfoType.getType(loaded) instanceof GunType magazine
 							&& acceptsMagazine(type,magazine))) continue;
 			if(hasRound(loaded))
@@ -332,7 +332,7 @@ public final class GunMagazine
 	{
 		return findAmmo(player.getInventory(),type);
 	}
-	/** The fullest actual magazine wins; direct-bullet fallback requires explicit opt-in. */
+	/** The fullest actual magazine wins; FMUM direct-bullet fallback requires explicit opt-in. */
 	public static ItemStack findAmmo(net.minecraft.world.entity.player.Inventory inventory, GunType type)
 	{
 		ItemStack best = ItemStack.EMPTY;
@@ -382,7 +382,7 @@ public final class GunMagazine
 			return false;
 		if(flan.type instanceof GunType mag && mag.itsType == GunType.GunItsType.MAG)
 			return acceptsMagazine(type, mag);
-		if(type.itsType!=GunType.GunItsType.MAG && !type.allowDirectAmmoLoading)
+		if(magazineOnlySupply(type))
 			return false;
 		for(com.flansmod.common.types.BulletType accepted : type.ammo)
 			if(flan.type == accepted)
@@ -390,6 +390,11 @@ public final class GunMagazine
 		if(flan.type instanceof com.flansmod.common.types.BulletType bullet)
 			return type.ammoNames.stream().anyMatch(n -> n.equalsIgnoreCase(bullet.shortName) || n.equalsIgnoreCase(bullet.ammoType));
 		return false;
+	}
+	/** Only FMUM guns declare a separate Mag supply. Standard Flan Ammo/RoundsPerItem items
+	 * are already the gun's ammunition containers and must retain their original reload path. */
+	private static boolean magazineOnlySupply(GunType type) {
+		return type.itsType!=GunType.GunItsType.MAG && !type.magazineNames.isEmpty() && !type.allowDirectAmmoLoading;
 	}
 	public static boolean acceptsMagazine(GunType gun, GunType mag) {
 		return gun.itsType != GunType.GunItsType.MAG && mag.itsType == GunType.GunItsType.MAG
@@ -436,6 +441,40 @@ public final class GunMagazine
 		CustomData data=stack.get(DataComponents.CUSTOM_DATA);
 		setList(stack,data==null?null:data.copyTag(),rounds);
 	}
+	/** Ejects one round from a magazine into the player's inventory (G while holding a magazine). */
+	public static boolean ejectOneRound(net.minecraft.server.level.ServerPlayer player, ItemStack stack, GunType mag)
+	{
+		if(mag == null || mag.itsType != GunType.GunItsType.MAG) return false;
+		ListTag list = ammoList(stack, mag, false);
+		if(list == null) return false;
+		for(int i = 0; i < list.size(); i++)
+		{
+			ItemStack round = readEntry(list, i);
+			if(round.isEmpty() || roundsRemaining(round) <= 0) continue;
+			ItemStack ejected = round.copy();
+			ejected.setCount(1);
+			if(roundsPerItem(ejected) > 1) setRoundsRemaining(ejected, 1);
+			int left = roundsRemaining(round) - 1;
+			if(roundsPerItem(round) > 1 && left > 0)
+			{
+				round.setCount(1);
+				setRoundsRemaining(round, left);
+				list.set(i, round.save(net.minecraft.core.RegistryAccess.EMPTY));
+			}
+			else if(left > 0)
+			{
+				round.setCount(left);
+				list.set(i, round.save(net.minecraft.core.RegistryAccess.EMPTY));
+			}
+			else list.remove(i);
+			writeMagazine(stack, list);
+			if(!player.getInventory().add(ejected))
+				player.drop(ejected, false);
+			return true;
+		}
+		return false;
+	}
+
 	/** Bottom-to-mouth index, matching FMUM's ammo array; legacy counted stacks remain readable. */
 	public static ItemStack magazineRoundAt(ItemStack stack,GunType mag,int index) {
 		if(mag.itsType!=GunType.GunItsType.MAG || index<0) return ItemStack.EMPTY;

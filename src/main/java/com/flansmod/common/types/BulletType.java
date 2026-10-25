@@ -21,6 +21,14 @@ public class BulletType extends ShootableType
 	public boolean setEntitiesOnFire = false;
 
 	/**
+	 * Whether this round may break the blocks it hits. On by default (the mechanic is on for every
+	 * bullet); the block power still depends on the round's penetration level and calibre, so a
+	 * pistol round can open dirt and glass while a rifle round takes stone and a heavy calibre takes
+	 * iron. Packs can opt a round out with {@code PenetratesBlocks false}.
+	 */
+	public boolean breaksBlocks = true;
+
+	/**
 	 * Rounds this bullet can pass through before it stops, spent one per thing hit.
 	 *
 	 * <p>The packs set it two ways: {@code Penetrates True/False} is the old boolean spelling
@@ -153,6 +161,7 @@ public class BulletType extends ShootableType
 				case "HitSoundRange" -> hitSoundRange = toFloat(split[1]);
 				// Both spellings of penetration: the old boolean (1 round through, or a quarter)
 				// and the direct number. 1.7.10 accepted either and so does the port.
+				case "PenetratesBlocks" -> breaksBlocks = toBool(split[1]);
 				case "Penetrates" -> penetratingPower = toBool(split[1]) ? 1F : 0.25F;
 				case "Penetration", "PenetratingPower" -> penetratingPower = toFloat(split[1]);
 				case "HasLight" -> hasLight = toBool(split[1]);

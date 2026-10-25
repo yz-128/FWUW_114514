@@ -26,6 +26,19 @@ public class AttachmentType extends ModifiableType
 	public String itsType = "";
 
 	/**
+	 * Whether this attachment can be the thing the eye aims through.
+	 *
+	 * <p>The FMUM packs mark some tactical devices as {@code ItsType sight} — AN/PEQ-15 is the
+	 * known one — because 1.7.10 reused the sight render category for every rail item. A device
+	 * that only emits light or a laser is still not an optic, and letting it into
+	 * {@link com.flansmod.common.GunSightState}'s aiming groups moved the ADS camera onto the
+	 * side rail: the rifle then appeared giant and off-screen.
+	 */
+	public boolean isAimingSight() {
+		return "sight".equalsIgnoreCase(itsType) && !flashlight && !laserPointer;
+	}
+
+	/**
 	 * Parts this attachment requires to be mounted before it fits — the "Need:AK74 AK74N" note a
 	 * pack puts in the description, made machine-readable.
 	 */
@@ -35,6 +48,8 @@ public class AttachmentType extends ModifiableType
 	public boolean flashlight = false;
 	public float flashlightRange = 10F;
 	public int flashlightStrength = 12;
+	/** The flashlight's lens/glow model: 1.7.10 {@code Flashlight <bool> [range] [light model]}. */
+	public String lightModel;
 
 	public float spreadMultiplier = 1F;
 	public float recoilMultiplier = 1F;
@@ -244,11 +259,13 @@ public class AttachmentType extends ModifiableType
 				}
 				case "Silencer" -> silencer = toBool(split[1]);
 				case "Flashlight" -> {
+					// 1.7.10: Flashlight <bool> [range] [light model]. The old port read the model
+					// token as a numeric strength, so the light model reference was thrown away.
 					flashlight = toBool(split[1]);
 					if(split.length > 2)
 						flashlightRange = toFloat(split[2]);
-					if(split.length > 3)
-						flashlightStrength = toInt(split[3]);
+					if(split.length > 3 && !split[3].equalsIgnoreCase("None"))
+						lightModel = split[3];
 				}
 				case "SpreadMultiplier" -> spreadMultiplier = toFloat(split[1]);
 				case "RecoilMultiplier" -> {

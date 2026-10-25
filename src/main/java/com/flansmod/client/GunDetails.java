@@ -51,6 +51,9 @@ public final class GunDetails {
 	private static void line(List<Component> lines,String key,Object... values) { lines.add(Component.translatable("stats.flansmod."+key,values).withStyle(ChatFormatting.GRAY)); }
 	public static String number(float value) { return java.math.BigDecimal.valueOf(value).setScale(3,java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString(); }
 	@SubscribeEvent public static void fov(ViewportEvent.ComputeFov event) {
+		if(event.usedConfiguredFov() && com.flansmod.client.render.ScopeWorldTexture.inScopePass()) {
+			event.setFOV(com.flansmod.client.render.ScopeWorldTexture.renderFov());return;
+		}
 		var mc=Minecraft.getInstance();if(mc.player==null || !mc.options.getCameraType().isFirstPerson()) return;
 		net.minecraft.world.item.ItemStack held=mc.player.getMainHandItem();
 		if(!(InfoType.getType(held) instanceof GunType gun))return;
@@ -64,14 +67,12 @@ public final class GunDetails {
 			base=mc.options.fov().get();
 			if(event.getCamera().getFluidInCamera()==net.minecraft.world.level.material.FogType.WATER)base*=60D/70D;
 		}
-		double zoom=1;
+		double zoom=1;boolean hasScope=false;
 		if(event.usedConfiguredFov() && !PlayerHandler.getPlayerData(mc.player).sightFolding(mc.player)) {
 			var view=GunAttachments.view(gun,held);
 			var scope=GunSightState.scopeSight(view);
-			// Magnify the world pass itself, the way TACZ does, instead of sampling a crop of the
-			// finished frame. The frame buffer holds every pixel the camera can see; cropping a
-			// fifth of it and stretching it over the ocular is what made the image soft.
-			if(scope!=null)
+			hasScope=scope!=null;
+			if(hasScope)
 				zoom=com.flansmod.client.render.ScopeMagnification.zoom(scope.type(),scope.node().zoomStep);
 			else {
 				var sight=GunSightState.selectedSight(view);
@@ -81,7 +82,10 @@ public final class GunDetails {
 			zoom=1+(zoom-1)*AimState.blend((float)event.getPartialTick());
 		}
 		if(event.usedConfiguredFov())com.flansmod.client.render.ScopeMagnification.frame(base*(1F+kick),zoom);
-		event.setFOV(base*(1F+kick)/zoom);
+		double cameraZoom=com.flansmod.client.render.ScopeMagnification.worldZoom(zoom,hasScope,
+				com.flansmod.client.render.ScopeWorldTexture.dualRenderEnabled(),
+				com.flansmod.client.render.ScopeWorldTexture.inScopePass());
+		event.setFOV(base*(1F+kick)/cameraZoom);
 	}
 	@SubscribeEvent public static void sensitivity(net.neoforged.neoforge.client.event.CalculatePlayerTurnEvent event) {
 		var mc=Minecraft.getInstance();

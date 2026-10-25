@@ -10,6 +10,7 @@ import com.flansmod.client.model.loader.ModelCache;
 import com.flansmod.common.FlansMod;
 import com.flansmod.common.GunMagazine;
 import com.flansmod.common.types.DriveableType;
+import com.flansmod.common.types.AttachmentType;
 import com.flansmod.common.types.GrenadeType;
 import com.flansmod.common.types.GunType;
 import com.flansmod.common.types.InfoType;
@@ -185,7 +186,10 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 					+ " Texture=" + type.texture + " -> " + wanted + " present=" + present);
 		}
 
+		boolean composeSights=type instanceof GunType && displayContext.firstPerson();
+		if(composeSights)FmumSightRenderer.beginWeapon((GunType)type);
 		pose.pushPose();
+		try {
 		var recoilFrame=type instanceof GunType gun && gun.itsType!=GunType.GunItsType.MAG && displayContext.firstPerson()
 				?GunAnimationRegistry.right(Minecraft.getInstance().player).fmumRecoil.frame(
 						Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true),SHAKE_RANDOM)
@@ -239,7 +243,9 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 		if(probeWindow())
 			probePose("gun:" + type.shortName, pose, rig);
 
-		if(rig.quadsByPart.size() > 1)
+		if(type instanceof AttachmentType)
+			renderAttachmentSurface(pose,buffers,rig,textureFor(type),0,light,overlay,mirrored);
+		else if(rig.quadsByPart.size() > 1)
 			renderAnimatedParts(pose, buffer, rig, type, stack, displayContext, light, overlay, mirrored);
 		else
 			RigRenderer.render(pose, buffer, rig, light, overlay, 1F, 1F, 1F, 1F, mirrored);
@@ -251,7 +257,8 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 		if(type instanceof com.flansmod.common.types.GunType gun && !gun.defaultAttachments.isEmpty())
 		{
 			renderAttachments(pose,buffers,gun,gun.defaultAttachments.stream().flatMap(List::stream).toList(),mirrored,light,overlay,
-					displayContext.firstPerson()?partMotion(gun,rig,stack):null,folding,new int[0]);
+					displayContext.firstPerson()?partMotion(gun,rig,stack):null,folding,new int[0],gun.fireModeIndex(stack),
+					stack,displayContext.firstPerson());
 		}
 		if(type instanceof GunType gun && gun.itsType!=GunType.GunItsType.MAG)
 			renderMagazine(pose,buffers,gun,stack,rig,displayContext.firstPerson(),mirrored,light,overlay);
@@ -266,8 +273,11 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 			renderArms(pose, buffers, gun, rig, mirrored, light, overlay,folding);
 		if(type instanceof GunType gun)
 			MuzzleEffectsRenderer.render(pose,buffers,gun,stack,displayContext,rig.animation,light,overlay,mirrored);
-
-		pose.popPose();
+		if(composeSights)FmumSightRenderer.finishWeapon(buffers);
+		} finally {
+			if(composeSights)FmumSightRenderer.cancelWeapon();
+			pose.popPose();
+		}
 	}
 
 	/**
@@ -400,7 +410,8 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 	 */
 	private static void renderAttachments(PoseStack pose, MultiBufferSource buffers, ModifiableType owner,
 										  java.util.List<ModifiableType.DefaultAttachment> nodes,
-										  boolean mirrored,int light,int overlay,PartMotion motion,SightFoldAnimations.Frame folding,int[] parent)
+										  boolean mirrored,int light,int overlay,PartMotion motion,SightFoldAnimations.Frame folding,int[] parent,int fireMode,
+										  ItemStack stack,boolean firstPerson)
 	{
 		var indices=new java.util.HashMap<Integer,Integer>();
 		for(ModifiableType.DefaultAttachment node : nodes)
@@ -433,33 +444,94 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 
 			BakedRig partRig = ModelCache.rigFor(at, at.modelScale);
 			var foldPart=folding.part(path);
-			boolean animated=foldPart!=null && SightFoldRenderer.render(pose,buffers,foldPart,folding.phase(),light,overlay,mirrored,motion!=null);
+			boolean animated=foldPart!=null && SightFoldRenderer.render(pose,buffers,foldPart,folding.phase(),light,overlay,mirrored,motion!=null,fireMode);
 			if(!animated && partRig != null && !partRig.quads.isEmpty())
 			{
 				// An attachment model carries conditional meshes beside its body — a flashlight
 				// cone and a fire-mode indicator. 1.7.10 drew those only when their state was on,
 				// so drawing the whole rig here would leave a cone and selector permanently
 				// visible. ModelAttachment.render() draws exactly one array, and so does this.
-				java.util.List<BakedRig.Quad> body = partRig.quadsByPart.get("attachmentModel");
-				if(body == null || body.isEmpty())
-					body = partRig.quads;
-				VertexConsumer partBuffer = buffers.getBuffer(RenderType.entityCutout(textureFor(at)));
-				if(partBuffer != null && !body.isEmpty())
-					RigRenderer.renderPart(pose, partBuffer, body, light, overlay, 1F, 1F, 1F, 1F, mirrored);
+				renderAttachmentSurface(pose,buffers,partRig,textureFor(at),fireMode,light,overlay,mirrored);
 			}
+			// Tactical devices are separate glow models, not part of the attachment body: 1.7.10
+			// renders the flashlight lens / laser emitter only while its switch is on.
+			renderTacticalDevice(pose,buffers,at,partRig,stack,firstPerson,overlay,mirrored);
 
 			// The sight's reticle model. 1.7.10 kept it in a second model array and drew it only
 			// while the gun was raised; it is not part of the attachment's own mesh, so it cannot
 			// come from the bake above.
-			if(motion!=null && !folding.active())FmumSightRenderer.render(pose,buffers,at,node,motion.gun,partRig,overlay,mirrored);
+			if(motion!=null && !folding.active()) {
+				// The scope prepares a nested world render from inside this hand pass. Anything
+				// still queued in the shared BufferSource would be batched into the scope target
+				// with the world camera, which showed up as a huge receiver/attachment inside the
+				// ocular after a left-side device was installed. Flush our geometry into the real
+				// target first; the scope's own guard then only has to handle the sight itself.
+				if(buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource source)
+					source.endBatch();
+				FmumSightRenderer.render(pose,buffers,at,node,motion.gun,partRig,overlay,mirrored);
+			}
 
 			if(!node.children.isEmpty()) {
 				pose.pushPose();
 				if(foldPart!=null)pose.mulPose(SightFoldRenderer.children(foldPart,folding.phase(),at));
-				renderAttachments(pose,buffers,at,node.children,mirrored,light,overlay,motion,folding,path);
+				renderAttachments(pose,buffers,at,node.children,mirrored,light,overlay,motion,folding,path,fireMode,stack,firstPerson);
 				pose.popPose();
 			}
 
+			pose.popPose();
+		}
+	}
+
+	/** The source model's ordinary surface plus its proven glowOn/off lightmap sections. */
+	private static void renderAttachmentSurface(PoseStack pose, MultiBufferSource buffers, BakedRig rig,
+			ResourceLocation texture, int fireMode, int light, int overlay, boolean mirrored)
+	{
+		var buffer = buffers.getBuffer(RenderType.entityCutout(texture));
+		if(buffer == null) return;
+		var body = rig.attachmentBody(fireMode);
+		if(!body.isEmpty()) RigRenderer.renderPart(pose,buffer,body,light,overlay,1F,1F,1F,1F,mirrored);
+		// A named flashlight/laser/reticle array alone never opts into the ordinary body stage.
+		for(var emission : rig.emissivePasses(fireMode))
+			RigRenderer.renderPart(pose,buffer,emission.quads(),emission.light().apply(light),
+					overlay,1F,1F,1F,1F,mirrored);
+	}
+
+	/**
+	 * The flashlight's lens model and the laser emitter model, both drawn full-bright while their
+	 * stack switches are on. 1.7.10 keeps them in separate model arrays so they never become part
+	 * of the body; the laser is offset by the attachment model's authored {@code laserFrom} point.
+	 */
+	private static void renderTacticalDevice(PoseStack pose, MultiBufferSource buffers,
+			com.flansmod.common.types.AttachmentType at, BakedRig partRig, ItemStack stack,
+			boolean firstPerson, int overlay, boolean mirrored)
+	{
+		if(stack == null || stack.isEmpty() || at == null)
+			return;
+		var texture = textureFor(at);
+		if(at.flashlight && com.flansmod.common.GunAttachments.isLightOn(stack) && at.lightModel != null)
+		{
+			var lightRig = ModelCache.rigForReference(at.lightModel, at.modelScale, texture);
+			if(lightRig != null && !lightRig.quads.isEmpty())
+				RigRenderer.render(pose, buffers.getBuffer(RenderType.entityTranslucentEmissive(texture)), lightRig,
+						net.minecraft.client.renderer.LightTexture.FULL_BRIGHT, overlay, 1F, 1F, 1F, 1F, mirrored);
+		}
+		if(at.laserPointer && com.flansmod.common.GunAttachments.isLaserOn(stack))
+		{
+			String model = firstPerson ? at.laserModelFP : at.laserModel;
+			if(model == null)
+				model = at.laserModelFP != null ? at.laserModelFP : at.laserModel;
+			if(model == null)
+				return;
+			var laserRig = ModelCache.rigForReference(model, at.modelScale, texture);
+			if(laserRig == null || laserRig.quads.isEmpty())
+				return;
+			float[] from = FmumActionPose.vector(partRig == null ? null : partRig.animation, "laserFrom");
+			pose.pushPose();
+			// 1.7.10: glScalef(modelScale) then glTranslatef(laserFrom), so the authored point is in
+			// model units and the world offset is that point times the part's model scale.
+			pose.translate(from[0] * at.modelScale, from[1] * at.modelScale, from[2] * at.modelScale);
+			RigRenderer.render(pose, buffers.getBuffer(RenderType.entityTranslucentEmissive(texture)), laserRig,
+					net.minecraft.client.renderer.LightTexture.FULL_BRIGHT, overlay, 1F, 1F, 1F, 1F, mirrored);
 			pose.popPose();
 		}
 	}
@@ -601,6 +673,18 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 			List<BakedRig.Quad> quads = entry.getValue();
 			boolean skip = false;
 
+			// The fire-mode selector is one array holding every position (safe / semi / auto).
+			// 1.7.10's renderSwitch drew only the current mode's slice; drawing the whole array
+			// leaves all three levers on the receiver at once.
+			if(gun != null && rig.switchModelsPerState() > 0)
+			{
+				int fireMode = gun.fireModeIndex(stack);
+				if("switchModel".equals(part))
+					quads = rig.switchModelSlice(fireMode);
+				else if("slideSwitchModel".equals(part))
+					quads = rig.slideSwitchModelSlice(fireMode);
+			}
+
 			pose.pushPose();
 
 			// RenderGun drew the animated parts under their own GL push/pop, each with one
@@ -608,6 +692,9 @@ public class TurborigItemRenderer extends BlockEntityWithoutLevelRenderer
 			switch(part)
 			{
 				case "slideModel" -> pose.translate(FmumReloadPose.slide(rig.animation,fmumReload,action,
+						-lerp(animation.lastGunSlide,animation.gunSlide,smoothing)*rig.animation.gunSlideDistance,
+						displayContext.firstPerson()&&com.flansmod.common.GunActions.boltCaught(stack))*scale,0F,0F);
+				case "slideSwitchModel" -> pose.translate(FmumReloadPose.slide(rig.animation,fmumReload,action,
 						-lerp(animation.lastGunSlide,animation.gunSlide,smoothing)*rig.animation.gunSlideDistance,
 						displayContext.firstPerson()&&com.flansmod.common.GunActions.boltCaught(stack))*scale,0F,0F);
 				case "pumpModel" -> pose.translate((action.operation()==com.flansmod.common.GunActionState.Operation.CHECK_CHAMBER || fmumReload.step()==com.flansmod.common.GunReloadState.Step.CHARGE

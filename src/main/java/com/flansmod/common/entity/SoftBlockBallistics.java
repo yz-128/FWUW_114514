@@ -18,6 +18,9 @@ public final class SoftBlockBallistics {
 	private SoftBlockBallistics() { }
 	private record Interval(double from, double to) { }
 
+	/** One block the round crossed on this segment. */
+	public interface PassedBlock { void accept(BlockPos pos, BlockState state); }
+
 	/** The tooltip's penetration bracket, kept deterministic for a round's entire flight. */
 	public static float penetrationLevel(BulletType round) {
 		if(round == null) return 0F;
@@ -33,6 +36,16 @@ public final class SoftBlockBallistics {
 	 */
 	public static float remainingDamage(BlockGetter world, Vec3 from, Vec3 to, Entity projectile,
 			BulletType round, float damage) {
+		return remainingDamage(world, from, to, projectile, round, damage, null);
+	}
+
+	/**
+	 * The same integration, reporting every pass-through block it crossed. The bullet uses the
+	 * report to open the soft blocks it flies through (wooden walls can be shot away) while the
+	 * damage attenuation keeps working exactly as before.
+	 */
+	public static float remainingDamage(BlockGetter world, Vec3 from, Vec3 to, Entity projectile,
+			BulletType round, float damage, PassedBlock observer) {
 		if(damage <= 0F || from.distanceToSqr(to) < 1E-20D) return damage;
 		var context = new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, projectile);
 		double[] resistance = {0D};
@@ -41,6 +54,7 @@ public final class SoftBlockBallistics {
 			if(state.is(BulletBlockTrace.PASS_THROUGH)) {
 				var shape = clip.getBlockShape(state, world, pos);
 				resistance[0] += thickness(shape, pos, from, to) * resistance(state);
+				if(observer != null) observer.accept(pos, state);
 			}
 			return null;
 		}, clip -> null);
@@ -49,8 +63,11 @@ public final class SoftBlockBallistics {
 		return (float)(damage * retained);
 	}
 
+	/** Leaves never resist a round: every bullet flies through foliage without losing damage. */
+	public static double leavesResistance() { return 0D; }
+
 	private static double resistance(BlockState state) {
-		if(state.is(BlockTags.LEAVES)) return .06D;
+		if(BulletBlockPenetration.isLeaves(state)) return leavesResistance();
 		if(state.is(BlockTags.WOOL) || state.is(BlockTags.WOOL_CARPETS) || state.is(BlockTags.BEDS)) return .18D;
 		return .35D; // Wood and any additional blocks explicitly added to the pass-through tag.
 	}

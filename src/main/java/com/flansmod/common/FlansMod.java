@@ -81,6 +81,34 @@ public class FlansMod
 							.updateInterval(1)
 							.build("bullet"));
 
+	/** A thrown grenade. Like a round it can travel a long way, so tracking is generous. */
+	public static final net.neoforged.neoforge.registries.DeferredHolder<
+			net.minecraft.world.entity.EntityType<?>, net.minecraft.world.entity.EntityType<com.flansmod.common.entity.EntityGrenade>>
+			GRENADE = ENTITIES.register("grenade", () ->
+					net.minecraft.world.entity.EntityType.Builder
+							.<com.flansmod.common.entity.EntityGrenade>of(
+									com.flansmod.common.entity.EntityGrenade::new,
+									net.minecraft.world.entity.MobCategory.MISC)
+							.sized(0.35F, 0.35F)
+							.noSummon()
+							.clientTrackingRange(96)
+							.updateInterval(10)
+							.build("grenade"));
+
+	/** A gun lying on the ground, 1.7.10's {@code EntityGunItem}. */
+	public static final net.neoforged.neoforge.registries.DeferredHolder<
+			net.minecraft.world.entity.EntityType<?>, net.minecraft.world.entity.EntityType<com.flansmod.common.entity.EntityGunItem>>
+			GUN_ITEM = ENTITIES.register("gun_item", () ->
+					net.minecraft.world.entity.EntityType.Builder
+							.<com.flansmod.common.entity.EntityGunItem>of(
+									com.flansmod.common.entity.EntityGunItem::new,
+									net.minecraft.world.entity.MobCategory.MISC)
+							.sized(0.6F, 0.6F)
+							.noSummon()
+							.clientTrackingRange(64)
+							.updateInterval(20)
+							.build("gun_item"));
+
 	public FlansMod(IEventBus modEventBus, ModContainer modContainer)
 	{
 		INSTANCE = this;
@@ -112,6 +140,18 @@ public class FlansMod
 
 		ENTITIES.register(modEventBus);
 		com.flansmod.common.inventory.GunModificationMenus.register(modEventBus);
+
+		// Mechanics settings: the file is editable from the mod list, a data pack can override it,
+		// and the values are read through MechanicsSettings at the points that use them.
+		com.flansmod.common.config.MechanicsConfig.register(modContainer);
+		if(net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT)
+		{
+			// A typed local avoids the registerExtensionPoint(Class, T) vs (Class, Supplier) overload
+			// ambiguity a bare lambda would hit.
+			net.neoforged.neoforge.client.gui.IConfigScreenFactory factory =
+					(container, parent) -> new com.flansmod.client.gui.MechanicsConfigScreen(parent);
+			modContainer.registerExtensionPoint(net.neoforged.neoforge.client.gui.IConfigScreenFactory.class, factory);
+		}
 	}
 
 	/**
@@ -357,6 +397,9 @@ public class FlansMod
 			if(definition instanceof com.flansmod.common.types.ModifiableType modifiable)
 				modifiable.resolveDefaultAttachments();
 		linkGunAmmo();
+		// The packs reference a few case definitions they do not ship; fill those gaps so every
+		// gun's spent brass can be ejected instead of silently nothing.
+		GunCasings.linkMissingCases();
 	}
 
 	/**

@@ -202,7 +202,7 @@ public class GeneratedAssets extends AbstractPackResources
 				appendLang(langByLocale, firstByLocale, written, locale, e.getKey(), e.getValue());
 			}
 		}
-		int models = 0, threeD = 0, icons = 0;
+		int models = 0, threeD = 0, icons = 0, missingIcons = 0, skinIcons = 0;
 
 		for(Map.Entry<String, String> e : ItemAssets.iconPaths().entrySet())
 		{
@@ -224,15 +224,49 @@ public class GeneratedAssets extends AbstractPackResources
                 }
             }
 
+            if(type instanceof com.flansmod.common.types.AttachmentType attachment
+                    && ((attachment.lightStuffModel!=null && !attachment.lightStuffModel.equalsIgnoreCase("none"))
+                        || (attachment.blackMaskModel!=null && !attachment.blackMaskModel.equalsIgnoreCase("none")))) {
+                for(int frame=0;frame<Math.max(1,attachment.lightTextureCount);frame++) {
+                    var source=com.flansmod.client.render.ReticleResources.source(attachment,frame);
+                    if(source.isPresent())try {
+                        out.put(com.flansmod.client.render.ReticleResources.texture(attachment,frame).getPath(),
+                                source.get().entry().readAllBytes());
+                    }catch(IOException failure){FlansMod.LOGGER.warn("Cannot read reticle for "+path,failure);}
+                }
+            }
+
 			// The icon, copied to a lower-case name in the one folder the vanilla item atlas
 			// reads ("item/", singular) because the packs keep it at "items/" with mixed case.
 			byte[] iconBytes = findIcon(e.getValue());
+			boolean usedPlaceholder = false;
+			boolean usedSkin = false;
+			if(iconBytes == null && type != null)
+			{
+				// No pack ships this inventory icon. The definition's model skin almost always
+				// exists (that is what the 3D model draws), so use it as the flat icon: an item
+				// that 1.7.10 drew as the missing-texture marker now shows its own art.
+				iconBytes = findSkinIcon(type);
+				usedSkin = iconBytes != null;
+			}
+			if(iconBytes == null)
+			{
+				// Last resort: 1.7.10 drew the magenta missing-texture marker for exactly these
+				// items; a bundled placeholder is the modern equivalent of "there is an icon, it
+				// just is not this one".
+				iconBytes = placeholderIcon();
+				usedPlaceholder = iconBytes != null;
+			}
 			boolean haveIcon = iconBytes != null;
 			String spriteId = FlansMod.MODID + ":item/" + path;
 			if(haveIcon)
 			{
 				out.put("textures/item/" + path + ".png", iconBytes);
 				icons++;
+				if(usedSkin)
+					skinIcons++;
+				if(usedPlaceholder)
+					missingIcons++;
 			}
 
 			// "Can this be drawn as its 3D model?" is decided here, once, and expressed as the
@@ -304,6 +338,12 @@ public class GeneratedAssets extends AbstractPackResources
 
 		FlansMod.log("Generated " + models + " item model(s) (" + threeD + " with 3D rigs), "
 				+ icons + " icon texture(s) and a language file");
+		if(missingIcons > 0)
+			FlansMod.log("Item icons: " + missingIcons + " definition(s) name an icon no pack ships; "
+					+ "the bundled placeholder is used so they do not show the missing-texture marker");
+		if(skinIcons > 0)
+			FlansMod.log("Item icons: " + skinIcons + " definition(s) have no inventory icon; "
+					+ "their model skin is used instead so the item shows its own art");
 		return out;
 	}
 
@@ -345,6 +385,26 @@ public class GeneratedAssets extends AbstractPackResources
 		lang.append("  ").append(quote(key)).append(": ").append(quote(value));
 	}
 
+	/** The bundled "no pack ships this icon" placeholder, read once. */
+	private static byte[] PLACEHOLDER_ICON;
+
+	private static byte[] placeholderIcon()
+	{
+		if(PLACEHOLDER_ICON == null)
+		{
+			try(var in = GeneratedAssets.class.getResourceAsStream(
+					"/assets/" + FlansMod.MODID + "/textures/items/missingicon.png"))
+			{
+				PLACEHOLDER_ICON = in == null ? null : in.readAllBytes();
+			}
+			catch(IOException failure)
+			{
+				PLACEHOLDER_ICON = null;
+			}
+		}
+		return PLACEHOLDER_ICON;
+	}
+
 	/**
 	 * Finds a pack's icon by the {@code Icon} path a definition names.
 	 *
@@ -362,6 +422,45 @@ public class GeneratedAssets extends AbstractPackResources
 				return fallback==null ? null : fallback.readAllBytes();
 			} catch(IOException failure) { return null; }
 		}
+		try
+		{
+			return entry.get().readAllBytes();
+		}
+		catch(IOException failure) { return null; }
+	}
+
+	/**
+	 * The definition's model skin, used as the flat icon when no pack ships an inventory icon.
+	 *
+	 * <p>This repeats {@code Textures}' rule rather than calling it: {@code Textures} is a client
+	 * class and asset generation also runs on a dedicated server. Same two layouts, same
+	 * lower-casing — {@code skins/<name>.png} first, then {@code textures/skins/<name>.png}.
+	 */
+	private static byte[] findSkinIcon(InfoType type)
+	{
+		String texture = type.texture;
+		if(texture == null || texture.isBlank() || texture.equalsIgnoreCase("none"))
+		{
+			// A shootable definition with no Texture draws the stock round at render time
+			// (Textures.DEFAULT_BULLET); the icon should show the same art rather than a marker.
+			if(type instanceof com.flansmod.common.types.ShootableType)
+				texture = "defaultBullet";
+			else
+				return null;
+		}
+		if(texture.contains(":"))
+			return null;
+		String stem = texture.toLowerCase(java.util.Locale.ROOT).replaceFirst("\\.png$", "");
+		byte[] bytes = findPackBytes("skins/" + stem + ".png");
+		return bytes != null ? bytes : findPackBytes("textures/skins/" + stem + ".png");
+	}
+
+	/** Reads one file from whichever content pack ships it. */
+	private static byte[] findPackBytes(String relativePath)
+	{
+		var entry = ContentPackIndex.current().find("assets/" + FlansMod.MODID + "/" + relativePath, true);
+		if(entry.isEmpty())
+			return null;
 		try
 		{
 			return entry.get().readAllBytes();

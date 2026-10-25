@@ -1,0 +1,16 @@
+// Init script: inspect the run task without executing it. Use --no-configuration-cache.
+allprojects {
+    afterEvaluate {
+        if (tasks.findByName('runClientAuto') != null) {
+            tasks.register('verifyCompatRunDirectory') {
+                doLast {
+                    def expected = file(project.property('flansGameDir')).canonicalFile
+                    def actual = tasks.named('runClientAuto').get().gameDirectory.get().asFile.canonicalFile
+                    assert actual == expected : "RunGameTask points to ${actual}, expected ${expected}"
+                    assert actual != file('run').canonicalFile : 'Compatibility run must be isolated from run/'
+                    println "PASS isolated RunGameTask.gameDirectory=${actual}; game task was not executed"
+                }
+            }
+        }
+    }
+}

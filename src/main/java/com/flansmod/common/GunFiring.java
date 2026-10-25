@@ -217,6 +217,24 @@ public final class GunFiring
 		if(shootTime > 0)
 			return;                                    // still cooling down, or mid-reload
 
+		// An overheated gun is jammed: it refuses the trigger until the player racks the bolt with
+		// the charge key. The click is the gun's own empty-click sound, so no new audio is needed.
+		if(GunJamming.jammed(stack, gun))
+		{
+			if(firstRound)
+				FmumSounds.play(player, gun.emptyClickSound, gun.emptyClickSoundRange, gun.distortSound, false);
+			return;
+		}
+
+		// A barrel at full heat (or still locked after overheating) refuses the trigger; the click
+		// is the gun's own empty-click sound, so no new audio asset is needed.
+		if(BarrelHeat.blocked(data.heatOf(gun.shortName), data.lockOf(gun.shortName)))
+		{
+			if(firstRound)
+				FmumSounds.play(player, gun.emptyClickSound, gun.emptyClickSoundRange, gun.distortSound, false);
+			return;
+		}
+
 		// 1.7.10 stored the rounds inside the gun as damageable item stacks and searched the
 		// chambers here. Finding none, its next move was to start a reload rather than to do
 		// nothing — a gun that runs dry while the trigger is held reloads itself.
@@ -386,6 +404,10 @@ public final class GunFiring
 	{
 		var loadedDefinition=liveRound(stack,gun,chamber);
 		if(loadedDefinition==null) return;
+		// The shot is shaped by the barrel as it is *before* this round: what the player feels on
+		// this trigger pull must not include the heat this very round is about to add.
+		float heatBefore = data.heatOf(gun.shortName);
+		float heatRate = BarrelHeat.rateMultiplier(heatBefore, gun.heatRateMult);
 		GunStats.Values stats=GunStats.effective(gun,stack);
 		GunStats.Shot kick=level.isClientSide && !left?GunStats.shot(gun,stack,player.isShiftKeyDown(),
 				level.random.nextFloat(),level.random.nextFloat()):null;
@@ -417,7 +439,16 @@ public final class GunFiring
 		{
 			net.neoforged.neoforge.network.PacketDistributor.sendToPlayersTrackingEntityAndSelf(player,
 					new com.flansmod.common.network.GunShotPayload(player.getId(),gun.shortName,left,level.random.nextLong()));
-			if(gun.itsType==GunType.GunItsType.AUTO_GUN && GunAttachments.requirements(gun,stack,1))GunCasings.eject(player,gun,GunCasings.casing(loadedDefinition),false);
+			// 1.7.10 spawned the visible case for every gun that can auto-fire; the attachment
+			// requirement state does not gate it (a gun whose barrel part is missing still ejects
+			// its own brass). Keeping that gate here made several rifles — the M1A among them —
+			// shoot without any case at all.
+			if(gun.itsType==GunType.GunItsType.AUTO_GUN) {
+				var caseType=GunCasings.casing(loadedDefinition);
+				if(caseType!=null) GunCasings.eject(player,gun,caseType,false);
+				else FlansMod.LOGGER.debug("[Casings] no case: gun={} round={} itsCase={}",
+						gun.shortName,loadedDefinition.shortName,loadedDefinition.dropItemOnShoot);
+			}
 			else if(!left && gun.itsType==GunType.GunItsType.BOLT_GUN) {
 				data.boltChargeDelay=Math.max(0,gun.chargeDelay);data.boltChargeStack=stack;
 			}
@@ -434,8 +465,27 @@ public final class GunFiring
 
 		// The shot delay is the fire-rate timer; for a burst this is also what arms the countdown
 		// that {@link #onUseTick} walks down.
-		if(left) data.shootTimeLeft=nextShotDelay(data.shootTimeLeft,stats.delay());
-		else data.shootTimeRight=nextShotDelay(data.shootTimeRight,stats.delay());
+		// Heat goes up on both sides so the HUD (client) and the trigger lock (server) agree; the
+		// lock arms the moment the barrel crosses the line and runs down on the player tick. A hot
+		// barrel also lengthens the shot delay a little: full heat is heatRateMult slower.
+		if(BarrelHeat.enabled())
+		{
+			float delay = stats.delay() * heatRate;
+			// Heat belongs to the gun, so a hot barrel does not follow the player to another weapon.
+			float heat=BarrelHeat.afterShot(data.heatOf(gun.shortName),
+					gun.heatPerShot*MechanicsSettings.heatPerShotScale());
+			data.setHeatOf(gun.shortName,heat,gun.heatCoolRate*MechanicsSettings.heatCoolRateScale());
+			data.setLockOf(gun.shortName,BarrelHeat.lockOnOverheat(heat,data.lockOf(gun.shortName),gun.heatLockTicks));
+			if(BarrelHeat.overheated(heat))
+				GunJamming.setJam(stack,gun.shortName);
+			if(left) data.shootTimeLeft=nextShotDelay(data.shootTimeLeft,delay);
+			else data.shootTimeRight=nextShotDelay(data.shootTimeRight,delay);
+		}
+		else
+		{
+			if(left) data.shootTimeLeft=nextShotDelay(data.shootTimeLeft,stats.delay());
+			else data.shootTimeRight=nextShotDelay(data.shootTimeRight,stats.delay());
+		}
 
 		if(gun.modeFor(stack) == GunType.EnumFireMode.BURST && !left)
 			data.burstRoundsRemainingRight = gun.numBurstRounds - 1;

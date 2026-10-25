@@ -4,9 +4,12 @@ import java.util.List;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.UseAnim;
+import net.minecraft.world.level.Level;
 
 import com.flansmod.common.FlansMod;
 
@@ -29,6 +32,78 @@ public class ItemFlan extends Item
 		super(properties);
 		this.type = type;
 		type.item = this;
+	}
+
+	@Override
+	public int getUseDuration(ItemStack stack, LivingEntity entity)
+	{
+		if(!(type instanceof ToolType tool)) return 0;
+		if(com.flansmod.common.Tools.isEmergencyKit(tool)) return 72000;
+		return com.flansmod.common.Tools.isConsumable(tool) ? 32 : 0;
+	}
+
+	@Override
+	public void onUseTick(Level level, LivingEntity living, ItemStack stack, int remainingUseDuration)
+	{
+		if(type instanceof ToolType tool)
+			com.flansmod.common.Tools.continuousTick(level, living, stack, tool, remainingUseDuration);
+	}
+
+	@Override
+	public UseAnim getUseAnimation(ItemStack stack)
+	{
+		return type instanceof ToolType tool && com.flansmod.common.Tools.isDrink(tool)
+				? UseAnim.DRINK : UseAnim.EAT;
+	}
+
+	@Override
+	public ItemStack finishUsingItem(ItemStack stack, Level level, LivingEntity living)
+	{
+		if(type instanceof ToolType tool)
+		{
+			if(com.flansmod.common.Tools.isEmergencyKit(tool)) return stack;
+			// Food/drink is finished by Tools.serverFoodUse from the held-slot channel; letting
+			// vanilla finish as well would eat/consume twice.
+			if(com.flansmod.common.Tools.isConsumable(tool)) return stack;
+		}
+		return super.finishUsingItem(stack, level, living);
+	}
+
+	/**
+	 * Right-click behaviour for the kinds that have one.
+	 *
+	 * <p>Guns are driven from the client tick (see {@code GunAnimationDriver}), so only the thrown
+	 * and tool definitions need vanilla's use path. Everything else stays a plain item, which is
+	 * the same "no behaviour yet" shape the port started with.
+	 */
+	@Override
+	public net.minecraft.world.InteractionResultHolder<ItemStack> use(net.minecraft.world.level.Level level,
+			net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand)
+	{
+		ItemStack stack = player.getItemInHand(hand);
+		net.minecraft.world.InteractionResult result = net.minecraft.world.InteractionResult.PASS;
+		if(type instanceof GrenadeType grenade)
+			result = com.flansmod.common.Grenades.throwGrenade(level, player, stack, grenade);
+		else if(type instanceof ToolType tool && hand == net.minecraft.world.InteractionHand.MAIN_HAND)
+		{
+			// Food, drink and first-aid kits use vanilla's hold-to-use state so the arm raises and
+			// the effect is applied continuously (kits) or at the end (food/drink).
+			if(com.flansmod.common.Tools.isEmergencyKit(tool))
+			{
+				// The held slot is driven by MedkitClientTick/MedkitUsePayload; return CONSUME so
+				// the client raises the arm and blocks the click, without the shared Item class
+				// entering a lifecycle whose onUseTick may not fire for every content item.
+				return net.minecraft.world.InteractionResultHolder.consume(stack);
+			}
+			if(com.flansmod.common.Tools.isConsumable(tool))
+				return net.minecraft.world.InteractionResultHolder.consume(stack);
+			result = com.flansmod.common.Tools.use(level, player, stack, tool);
+		}
+		if(result == net.minecraft.world.InteractionResult.PASS)
+			return net.minecraft.world.InteractionResultHolder.pass(stack);
+		if(result == net.minecraft.world.InteractionResult.SUCCESS)
+			return net.minecraft.world.InteractionResultHolder.success(stack);
+		return net.minecraft.world.InteractionResultHolder.consume(stack);
 	}
 
 	/**
@@ -105,26 +180,63 @@ public class ItemFlan extends Item
 	}
 
 	@Override
+	public boolean isBarVisible(ItemStack stack)
+	{
+		return type instanceof ToolType tool && tool.toolLife > 0;
+	}
+
+	@Override
+	public int getBarWidth(ItemStack stack)
+	{
+		if(!(type instanceof ToolType tool) || tool.toolLife <= 0) return 0;
+		int remaining = com.flansmod.common.Tools.remainingToolLife(stack, tool);
+		return Math.max(0, Math.min(13, Math.round(13F * remaining / tool.toolLife)));
+	}
+
+	@Override
+	public int getBarColor(ItemStack stack)
+	{
+		if(!(type instanceof ToolType tool) || tool.toolLife <= 0) return 0xFFFFFF;
+		float left = (float)com.flansmod.common.Tools.remainingToolLife(stack, tool) / tool.toolLife;
+		return left <= .15F ? 0xFF3030 : left <= .35F ? 0xFFAA30 : 0x55FF55;
+	}
+
+	@Override
 	public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flags)
 	{
 		super.appendHoverText(stack, context, lines, flags);
+		// 1.7.10's ItemAttachment/ItemGun both opened with the pack name in italics and then the
+		// definition's Description, split on '_' into one tooltip line per segment.
+		if(type.contentPack != null && !type.contentPack.isBlank())
+			lines.add(Component.literal(type.contentPack)
+					.withStyle(ChatFormatting.ITALIC, ChatFormatting.DARK_GRAY));
+		if(type.description != null && !type.description.isBlank())
+			for(String line : type.description.split("_"))
+				if(!line.isBlank())
+					lines.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
+		if(type instanceof ToolType tool && tool.toolLife > 0)
+			lines.add(Component.translatable("tool.flansmod.uses",
+					com.flansmod.common.Tools.remainingToolLife(stack, tool), tool.toolLife)
+					.withStyle(ChatFormatting.GRAY));
 		if(type instanceof AttachmentType attachment)
 		{
 			lines.add(Component.translatable("attachment.flansmod.interface", attachment.attachmentType)
 					.withStyle(ChatFormatting.DARK_GRAY));
-			var parents = com.flansmod.common.GunAttachmentCatalog.directParents(attachment).stream()
-					.map(com.flansmod.common.GunAttachmentCatalog.ParentMount::parent).distinct().toList();
-			if(!parents.isEmpty())
+			// Weapons that actually accept this part. The previous code listed attachment parents,
+			// which read as nonsense ("muzzle brake fits onto a dust cover") because a part can sit
+			// on another part; the line's label promises weapons, so it lists weapons.
+			var guns = com.flansmod.common.GunAttachments.gunsAccepting(attachment);
+			if(!guns.isEmpty())
 			{
 				var names = Component.empty();
-				for(int i=0;i<Math.min(3,parents.size());i++)
+				for(int i=0;i<Math.min(3,guns.size());i++)
 				{
 					if(i>0) names.append(" / ");
-					var parent = parents.get(i);
-					names.append(parent.item == null ? Component.literal(parent.displayName())
-							: parent.item.getName(new ItemStack(parent.item)));
+					var gun = guns.get(i);
+					names.append(gun.item == null ? Component.literal(gun.displayName())
+							: gun.item.getName(new ItemStack(gun.item)));
 				}
-				if(parents.size()>3) names.append(" ").append(Component.translatable("attachment.flansmod.more",parents.size()-3));
+				if(guns.size()>3) names.append(" ").append(Component.translatable("attachment.flansmod.more",guns.size()-3));
 				lines.add(Component.translatable("attachment.flansmod.parents",names).withStyle(ChatFormatting.GRAY));
 			}
 		}

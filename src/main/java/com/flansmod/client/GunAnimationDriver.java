@@ -95,9 +95,9 @@ public final class GunAnimationDriver
 		com.flansmod.common.types.GunType firearmType = com.flansmod.common.GunActions.firearm(held);
 		if(firearmType != null)
 			AimState.setRetention(aimRetention(firearmType, held));
-		AimState.tick(firearmType != null && !data.sightFolding(player) && !data.gunAction.manualRest
+		AimState.tick(firearmType != null && !data.gunAction.manualRest
 				&& data.gunAction.takeOut==0F
-				&& aiming);
+				&& (aiming || DebugCompatScenes.forceAim()));
 
 		// FMUM's sprint pose is declared by holding/sprint vectors, not FMU2's fancyStance flag.
 		boolean fancyStance = type instanceof GunType gun

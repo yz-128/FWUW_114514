@@ -28,6 +28,14 @@ public final class GunReloading {
 		if(player.level().isClientSide || data.gunReload.active()) return false;
 		GunActions.ensureHeld(player,data);
 		if(data.sightFolding(player))return false;
+		// Overheat jam: only the charge key deals with it. Racking the bolt clears the jam, lowers
+		// the heat a little and plays the gun's charge sound; every other reload is refused.
+		if(GunJamming.jammed(stack,gun))
+		{
+			if(action!=Action.CHARGE) return false;
+			clearJam(player,data,stack,gun);
+			return true;
+		}
 		Inventory inventory=player.getInventory();
 		boolean special=action==Action.SPECIAL,manual=action==Action.CHARGE || action==Action.RELEASE_BOLT;
 		if(player.containerMenu instanceof com.flansmod.common.inventory.GunModificationMenu) return false;
@@ -201,6 +209,17 @@ public final class GunReloading {
 		if(!old.isEmpty()) returnItem.accept(old);
 		return true;
 	}
+	/** Clears an overheat jam: the bolt is racked, the heat drops to a warm value, the lock ends. */
+	private static void clearJam(Player player,PlayerData data,ItemStack stack,GunType gun) {
+		GunJamming.clear(stack);
+		float heat=GunJamming.clearedHeat(data.heatOf(gun.shortName));
+		data.setHeatOf(gun.shortName,heat,gun.heatCoolRate*MechanicsSettings.heatCoolRateScale());
+		data.setLockOf(gun.shortName,0);
+		String sound=gun.chargeSound.length>0?gun.chargeSound[0]:null;
+		if(sound==null || sound.isBlank() || sound.equalsIgnoreCase("None")) sound=gun.emptyClickSound;
+		GunActions.sound(player,sound,8F);
+	}
+
 	/** Manual charge ejects the old live round before feeding, as the EFT core does. */
 	public static void charge(ItemStack stack,GunType gun,java.util.function.Consumer<ItemStack> eject) {
 		GunCasings.retain(stack,null);

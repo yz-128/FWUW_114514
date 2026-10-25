@@ -85,6 +85,20 @@ public final class VerifyGunActions {
         check(midpoint==1 && out==1 && back==1,"inspection midpoint and both sounds exactly once");
         check(ticks>=60 && ticks<=63,"old strict >1/<0 timing");
         s.toggleRest();for(int i=0;i<12;i++)tick(s,false);close(s.progress,1,"manual rest 12 ticks");
+        var stowed=new GunActionState();
+        stowed.toggleRest();for(int i=0;i<12;i++)tick(stowed,false);close(stowed.progress,1,"stow fixture reaches rest");
+        check(GunActions.dismissManualRestOnAim(stowed,true),"aim dismisses a manual stow (FMUM ItemGun:198-202)");
+        check(!stowed.manualRest && stowed.operation==Operation.UNREST,"stow turned into an unrest, not a silent flag flip");
+        stowed.toggleRest();for(int i=0;i<12;i++)tick(stowed,false);
+        check(!GunActions.dismissManualRestOnAim(stowed,false),"a released aim key keeps the stow");
+        check(stowed.manualRest && stowed.operation==Operation.REST,"stow survives an unpressed aim key");
+        // Switching/folding an optic must not drop the player out of ADS: the fold animation runs
+        // while the aim progress keeps following the input.
+        var aimingState=new GunActionState();
+        check(GunActions.aimingAllowed(aimingState,true),"aim rises while a sight fold is animating");
+        aimingState.manualRest=true;check(!GunActions.aimingAllowed(aimingState,true),"manual stow still blocks the aim");
+        aimingState.manualRest=false;aimingState.takeOut=1F;check(!GunActions.aimingAllowed(aimingState,true),"take-out motion still blocks the aim");
+        aimingState.takeOut=0F;check(!GunActions.aimingAllowed(aimingState,false),"released aim key still lowers the aim");
         s.request(Operation.CHECK_CHAMBER,60);check(s.operation==Operation.UNREST,"unrest before queued inspection");
         for(int i=0;i<9;i++)tick(s,false);check(s.operation==Operation.CHECK_CHAMBER,"inspection starts after unrest");
         s.resume();for(int i=0;i<10;i++)tick(s,false);check(s.ready(),"fire/reload reverses inspection");

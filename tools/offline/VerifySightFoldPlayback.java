@@ -16,6 +16,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import java.nio.file.Path;
 import java.util.*;
+import org.objectweb.asm.*;
+import org.objectweb.asm.tree.*;
 
 /** Packet, accepted-state matching, emitted meshes and a real supporting-hand gesture; no client. */
 public final class VerifySightFoldPlayback {
@@ -24,39 +26,109 @@ public final class VerifySightFoldPlayback {
     static void near(float a,float b,String message){check(Float.isFinite(a)&&Math.abs(a-b)<.00005F,message+" "+a+" != "+b);}
     static void matrix(Matrix4f a,Matrix4f b,String m){float[] aa=a.get(new float[16]),bb=b.get(new float[16]);for(int i=0;i<16;i++)near(aa[i],bb[i],m);}
     static GunSightAnimationPayload packet(int revision,List<GunSightAnimationPayload.Part> parts){return new GunSightAnimationPayload(42,0,"FoldPlayback",0,revision,0,101,parts);}
+    static Path packRoot;
     static class Recorder implements net.minecraft.client.renderer.MultiBufferSource,VertexConsumer {
         final Set<String> points=new HashSet<>();int vertices;float alpha;
+        final List<Vector3f> ordered=new ArrayList<>();final List<Integer> lights=new ArrayList<>(),alphas=new ArrayList<>();
         public VertexConsumer getBuffer(net.minecraft.client.renderer.RenderType type){return this;}
-        public VertexConsumer addVertex(float x,float y,float z){check(Float.isFinite(x)&&Float.isFinite(y)&&Float.isFinite(z),"finite emitted fold vertex");points.add(key(x,y,z));vertices++;return this;}
-        public VertexConsumer setColor(int r,int g,int b,int a){alpha=a/255F;check(a>0&&a<=255,"visible fold vertex alpha");return this;}
+        public VertexConsumer addVertex(float x,float y,float z){check(Float.isFinite(x)&&Float.isFinite(y)&&Float.isFinite(z),"finite emitted fold vertex");points.add(key(x,y,z));ordered.add(new Vector3f(x,y,z));vertices++;return this;}
+        public VertexConsumer setColor(int r,int g,int b,int a){alpha=a/255F;alphas.add(a);check(a>0&&a<=255,"visible fold vertex alpha");return this;}
         public VertexConsumer setUv(float u,float v){check(Float.isFinite(u)&&Float.isFinite(v),"finite fold texture UV");return this;}
         public VertexConsumer setUv1(int u,int v){return this;}
-        public VertexConsumer setUv2(int u,int v){return this;}
+        public VertexConsumer setUv2(int u,int v){lights.add(u|v<<16);return this;}
         public VertexConsumer setNormal(float x,float y,float z){check(Float.isFinite(x)&&Float.isFinite(y)&&Float.isFinite(z),"finite fold normal");return this;}
     }
     static String key(float x,float y,float z){return Math.round(x*10000)+":"+Math.round(y*10000)+":"+Math.round(z*10000);}
-    static Set<String> points(BakedRig rig){var points=new HashSet<String>();for(var q:rig.quadsByPart.get("attachmentModel"))for(var p:q.positions())points.add(key(p[0],p[1],p[2]));return points;}
-    static void geometry(GunSightAnimationPayload.Part part) {
+    static void addPoints(Set<String> points,List<BakedRig.Quad> quads){for(var q:quads)for(var p:q.positions())points.add(key(p[0],p[1],p[2]));}
+    /** Narrow oracle for these original folding classes. It reads the authored draw calls,
+     * never attachmentBody/emissivePasses/attachmentVisible or the port's material metadata. */
+    static IdentityHashMap<BakedRig.Quad,Integer> authoredSurface(BakedRig rig)throws Exception {
+        var cn=new ClassNode();try(var in=java.nio.file.Files.newInputStream(packRoot.resolve(rig.animation.className.replace('.','/')+".class"))){
+            new ClassReader(in).accept(cn,ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
+        }
+        var fields=new LinkedHashMap<String,Integer>();MethodNode draw=null;
+        for(var method:cn.methods)if(method.name.equals("render")&&method.desc.equals("(F)V"))draw=method;
+        if(draw==null){
+            check(cn.superName.endsWith("/ModelAtSight")||cn.superName.endsWith("/ModelAttachment"),"known core default render contract");
+            fields.put("attachmentModel",100);
+        }else{
+            String field=null;boolean glow=false;
+            for(var instruction:draw.instructions){
+                check(!(instruction instanceof JumpInsnNode),"oracle requires the actual folding class's straight-line render");
+                if(instruction instanceof FieldInsnNode get&&get.getOpcode()==Opcodes.GETFIELD&&get.desc.contains("ModelRendererTurbo"))field=get.name;
+                if(instruction instanceof MethodInsnNode call){
+                    if(call.name.equals("glowOn")){check(call.desc.equals("()V"),"authored default core glow strength is 15");glow=true;}
+                    else if(call.name.equals("glowOff"))glow=false;
+                    else if(call.name.equals("render")&&call.desc.startsWith("([Lcom/flansmod/client/tmt/ModelRendererTurbo;")){
+                        check(field!=null,"authored array draw has an explicit field");check(!fields.containsKey(field),"authored folding endpoint draws each array once");
+                        fields.put(field,glow?0xF000F0:100);field=null;
+                    }else throw new AssertionError("Extend independent oracle for original call "+call.name+call.desc);
+                }
+            }
+            check(!glow,"authored source restores its lightmap");
+        }
+        var result=new IdentityHashMap<BakedRig.Quad,Integer>();
+        for(var field:fields.entrySet()){
+            var quads=rig.quadsByPart.get(field.getKey());check(quads!=null&&!quads.isEmpty(),"authored field has actual original geometry "+field.getKey());
+            for(var quad:quads)check(result.put(quad,field.getValue())==null,"original surface identity appears once");
+        }
+        return result;
+    }
+    static String vertexKey(Vector3f point,int light,int alpha){return key(point.x,point.y,point.z)+"/"+light+"/"+alpha;}
+    static Map<String,Integer> actualVertices(Recorder recorder){
+        check(recorder.vertices==recorder.lights.size()&&recorder.vertices==recorder.alphas.size(),"every actual vertex carries light and alpha");
+        var result=new HashMap<String,Integer>();for(int i=0;i<recorder.vertices;i++)result.merge(vertexKey(recorder.ordered.get(i),recorder.lights.get(i),recorder.alphas.get(i)),1,Integer::sum);return result;
+    }
+    static void expectedVertices(Map<String,Integer> result,List<BakedRig.Quad> quads,Matrix4f pose,int light,float alpha){
+        if(alpha<=0)return;for(var quad:quads)for(var point:quad.positions())
+            result.merge(vertexKey(pose.transformPosition(new Vector3f(point)),light,(int)(alpha*255)),1,Integer::sum);
+    }
+    static Map<String,Integer> endpointVertices(IdentityHashMap<BakedRig.Quad,Integer> surface){
+        var result=new HashMap<String,Integer>();surface.forEach((quad,light)->expectedVertices(result,List.of(quad),new Matrix4f(),light,1));return result;
+    }
+    static boolean uvDifferent(List<BakedRig.Quad> a,List<BakedRig.Quad> b){
+        if(a.size()!=b.size())return true;for(int q=0;q<a.size();q++)for(int i=0;i<4;i++)for(int axis=0;axis<2;axis++)
+            if(Math.abs(a.get(q).uvs()[i][axis]-b.get(q).uvs()[i][axis])>2E-6F)return true;return false;
+    }
+    static void geometry(GunSightAnimationPayload.Part part)throws Exception {
         var from=AttachmentType.getAttachment(part.from());var to=AttachmentType.getAttachment(part.to());
         var a=ModelCache.rigFor(from,from.modelScale);var b=ModelCache.rigFor(to,to.modelScale);
         var start=new Recorder();check(SightFoldRenderer.render(new PoseStack(),start,part,0,100,0,false,false),"actual fold renderer handles source");
-        check(start.points.equals(points(a)),"emitted start exactly equals actual visible source body");
+        var sourceSurface=authoredSurface(a);var targetSurface=authoredSurface(b);
+        check(actualVertices(start).equals(endpointVertices(sourceSurface)),"source equals independently authored body+light vertices/light/alpha exactly once "+part.from());
         var end=new Recorder();SightFoldRenderer.render(new PoseStack(),end,part,1,100,0,false,false);
-        if(!end.points.equals(points(b))) {
-            var extra=new HashSet<>(end.points);extra.removeAll(points(b));var missing=new HashSet<>(points(b));missing.removeAll(end.points);
-            System.out.println(part.from()+" endpoint diff extra="+extra.stream().limit(8).toList()+" missing="+missing.stream().limit(8).toList());
-        }
-        check(end.points.equals(points(b)),"emitted end equals actual visible target body "+part.from());
+        check(actualVertices(end).equals(endpointVertices(targetSurface)),"target equals independently authored body+light vertices/light/alpha exactly once "+part.from());
+        check(start.vertices==sourceSurface.size()*4&&end.vertices==targetSurface.size()*4,"both endpoints conserve original visible face multiplicity");
         for(float p:new float[]{.1F,.5F,.9F}) {
             var mid=new Recorder();SightFoldRenderer.render(new PoseStack(),mid,part,p,100,0,false,false);
             check(mid.vertices>0&&mid.vertices%4==0,"intermediate body emits complete quads");
+            var expected=new HashMap<String,Integer>();
+            for(var track:SightFoldGeometry.plan(a,b).tracks()){
+                Integer source=track.source().isEmpty()?null:sourceSurface.get(track.source().getFirst());
+                Integer target=track.target().isEmpty()?null:targetSurface.get(track.target().getFirst());
+                if(track.matched()){
+                    Matrix4f rigid=track.pose(p);near(rigid.determinant3x3(),1,"intermediate motion is a proper rigid rotation");
+                    var positions=track.source().getFirst().positions();
+                    for(int i=1;i<4;i++)near(rigid.transformPosition(new Vector3f(positions[0])).distance(rigid.transformPosition(new Vector3f(positions[i]))),
+                            new Vector3f(positions[0]).distance(new Vector3f(positions[i])),"rigid playback keeps each source face edge length");
+                }
+                if(track.matched()&&source!=null&&target!=null){
+                    expectedVertices(expected,track.source(),track.pose(p),source,1);
+                    if(uvDifferent(track.source(),track.target())||!Objects.equals(from.texture,to.texture)||!source.equals(target))
+                        expectedVertices(expected,track.source(),track.pose(p),target,p);
+                }else{
+                    if(source!=null)expectedVertices(expected,track.source(),track.pose(p),source,1-p);
+                    if(target!=null)expectedVertices(expected,track.target(),track.targetPose(p),target,p);
+                }
+            }
+            check(actualVertices(mid).equals(expected),"intermediate conserves authored visible faces under rigid poses, including UV/material crossfade "+part.from()+" phase="+p);
             var mirror=new Recorder();SightFoldRenderer.render(new PoseStack(),mirror,part,p,100,0,true,false);
-            check(mid.vertices==mirror.vertices && mid.points.equals(mirror.points),"left-hand winding retains intermediate geometry");
+            check(actualVertices(mid).equals(actualVertices(mirror)),"left-hand winding retains full intermediate vertex/light/alpha multiplicity");
         }
     }
     public static void main(String[] args)throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();((net.minecraft.core.MappedRegistry<?>)BuiltInRegistries.ITEM).unfreeze();
-        var pack=new OfflinePack(Path.of(args[0]));pack.readTypes();for(var type:pack.types)
+        packRoot=Path.of(args[0]);var pack=new OfflinePack(packRoot);pack.readTypes();for(var type:pack.types)
             Registry.register(BuiltInRegistries.ITEM,ResourceLocation.fromNamespaceAndPath("flansmod","fold_playback_"+ids++),new ItemFlan(type,new Item.Properties()));
         var f=new TypeFile(EnumType.gun,"FoldPlayback",false);f.lines.addAll(List.of("ShortName FoldPlayback","AttachPoints 0 0 0","MaxAttachments 1"));
         var gun=new GunType(f);gun.read(f);Registry.register(BuiltInRegistries.ITEM,ResourceLocation.fromNamespaceAndPath("flansmod","fold_gun"),new ItemFlan(gun,new Item.Properties()));

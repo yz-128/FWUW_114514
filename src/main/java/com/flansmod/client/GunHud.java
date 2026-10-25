@@ -66,9 +66,14 @@ public final class GunHud
 		int modeColour = gun.canSwitchMode() ? 0xAAAAFF : 0x888888;
 		int modeX = sw / 2 + 96;
 		int modeY = sh - 31;
-		graphics.drawString(mc.font, mode, modeX + 1, modeY + 1, 0x000000, false);
-		graphics.drawString(mc.font, mode, modeX, modeY, modeColour, false);
+		if(com.flansmod.common.MechanicsSettings.ammoHudEnabled())
+		{
+			graphics.drawString(mc.font, mode, modeX + 1, modeY + 1, 0x000000, false);
+			graphics.drawString(mc.font, mode, modeX, modeY, modeColour, false);
+		}
 
+		if(com.flansmod.common.MechanicsSettings.ammoHudEnabled())
+		{
 		var entries=new java.util.ArrayList<AmmoEntry>();
 		if(gun.itsType==GunType.GunItsType.MAG) {
 			ItemStack top=GunMagazine.chamberedBullet(held);
@@ -107,6 +112,48 @@ public final class GunHud
 			graphics.drawString(mc.font, entry.text(), textX, textY, 0xFFFFFF, false);
 			ammoX += 16 + mc.font.width(entry.text()) + 4;
 		}
+		}
+
+		// Barrel heat: a thin bar above the hotbar, only once the barrel is warming up, plus a red
+		// OVERHEAT word while the trigger is locked. The client predicts the same heat the server
+		// does (both run fireRound), so the bar matches the lock in single player.
+		var data = com.flansmod.common.PlayerHandler.getPlayerData(mc.player);
+		if(data != null && com.flansmod.common.BarrelHeat.enabled()
+				&& com.flansmod.common.MechanicsSettings.heatBarEnabled())
+		{
+			float heat = data.heatOf(gun.shortName);
+			boolean locked = data.lockOf(gun.shortName) > 0;
+			if(heat > 0.02F || locked)
+			{
+				int barWidth = 90, barHeight = 3;
+				int barX = sw / 2 - barWidth / 2, barY = sh - 54;
+				graphics.fill(barX - 1, barY - 1, barX + barWidth + 1, barY + barHeight + 1, 0x90000000);
+				int colour = locked ? 0xFFFF3030 : heat > 0.6F ? 0xFFFF9A30 : 0xFFFFE066;
+				graphics.fill(barX, barY, barX + (int)(barWidth * Math.min(1F, heat)), barY + barHeight, colour);
+				if(locked)
+				{
+					String overheat = Component.translatable("hud.flansmod.overheat").getString();
+					int textX = sw / 2 - mc.font.width(overheat) / 2;
+					graphics.drawString(mc.font, overheat, textX + 1, barY - 11, 0x000000, false);
+					graphics.drawString(mc.font, overheat, textX, barY - 12, 0xFF6060, false);
+				}
+			}
+		}
+
+		renderAmmoType(graphics, mc, sw, sh);
+
+		// Overheat jam: the gun will not fire until G racks the bolt, so say so plainly above the
+		// heat bar (which may have cooled below the visible threshold while still jammed).
+		String jammedFor = com.flansmod.common.GunJamming.jam(held);
+		if(!jammedFor.isEmpty() && jammedFor.equals(gun.shortName))
+		{
+			String jam = Component.translatable("hud.flansmod.jammed").getString()
+					+ " · " + Component.translatable("hud.flansmod.jammed_hint").getString();
+			int jamX = sw / 2 - mc.font.width(jam) / 2;
+			int jamY = sh - 70;
+			graphics.drawString(mc.font, jam, jamX + 1, jamY + 1, 0x000000, false);
+			graphics.drawString(mc.font, jam, jamX, jamY, 0xFF6060, false);
+		}
 
 		// A small reserve count on the left: how many spare rounds the player is carrying of the
 		// first ammunition type this gun takes. Always shown for guns with magazines, because the
@@ -120,6 +167,33 @@ public final class GunHud
 		}
 	}
 	private record AmmoEntry(ItemStack stack,String text) { }
+
+	/** The transient bottom-right line shown after a magazine inspection. */
+	private static String ammoTypeText;
+	private static long ammoTypeUntil;
+	private static final long AMMO_TYPE_MS = 4000L;
+
+	/** Reads the loaded round's authored name for the inspection readout. */
+	public static void showAmmoType(ItemStack stack)
+	{
+		if(!(InfoType.getType(stack) instanceof GunType gun)) return;
+		ItemStack round = GunMagazine.getChamberedRound(stack);
+		if(round.isEmpty()) round = GunMagazine.get(stack, gun, 0);
+		if(round.isEmpty() || GunMagazine.roundsRemaining(round) <= 0) return;
+		InfoType type = InfoType.getType(round);
+		if(type == null) return;
+		ammoTypeText = Component.translatable("hud.flansmod.ammo_type", type.displayName()).getString();
+		ammoTypeUntil = System.currentTimeMillis() + AMMO_TYPE_MS;
+	}
+
+	private static void renderAmmoType(GuiGraphics graphics, Minecraft mc, int sw, int sh)
+	{
+		if(ammoTypeText == null || System.currentTimeMillis() > ammoTypeUntil) return;
+		int textX = sw - mc.font.width(ammoTypeText) - 8;
+		int textY = sh - 45;
+		graphics.drawString(mc.font, ammoTypeText, textX + 1, textY + 1, 0x000000, false);
+		graphics.drawString(mc.font, ammoTypeText, textX, textY, 0xFFFFFF, false);
+	}
 
 	/** Spare rounds carried, counted as rounds rather than as items. */
 	private static int countReserve(Minecraft mc, GunType gun)
@@ -145,7 +219,7 @@ public final class GunHud
 	 * player's language — the keys are the ones {@code GunDetails} already uses for the tooltip's
 	 * mode list — with the enum's English label as the fallback.
 	 */
-	private static String modeName(GunType.EnumFireMode mode)
+	public static String modeName(GunType.EnumFireMode mode)
 	{
 		return Component.translatableWithFallback(
 				"stats.flansmod.mode." + mode.name().toLowerCase(java.util.Locale.ROOT),

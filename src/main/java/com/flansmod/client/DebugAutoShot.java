@@ -184,13 +184,18 @@ public final class DebugAutoShot
 		var camera = mc.options.getCameraType();
 		if(wantThird)
 		{
-			if(!camera.isMirrored())
+			if(camera != net.minecraft.client.CameraType.THIRD_PERSON_BACK)
 			{
 				mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
 				FlansMod.LOGGER.info("[DebugAutoShot] Camera pulled back for the third-person frames.");
 			}
 		}
-		else if(camera.isMirrored())
+		else if(camera != net.minecraft.client.CameraType.FIRST_PERSON)
+		{
+			// Compare the enum itself: isMirrored() is a different question and did not reliably
+			// restore the camera, which left the later compatibility scenes in third person.
 			mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
+			FlansMod.LOGGER.info("[DebugAutoShot] Camera restored to first person.");
+		}
 	}
 }

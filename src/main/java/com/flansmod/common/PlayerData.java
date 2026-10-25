@@ -37,6 +37,42 @@ public class PlayerData
 	 * make it fire 20% too fast.
 	 */
 	public float shootTimeRight, shootTimeLeft;
+
+	/**
+	 * Barrel heat per gun, keyed by the gun's short name: swapping to a cold rifle must not
+	 * inherit the hot barrel of the one before it, and a holstered gun keeps cooling at its own
+	 * rate. Heat is not per hand, because both hands may hold the same weapon type.
+	 */
+	public static final class HeatState {
+		public float heat;
+		public int lock;
+		public float coolRate;
+	}
+	public final java.util.HashMap<String,HeatState> heatByGun = new java.util.HashMap<>();
+	public HeatState heatState(String gunShortName) {
+		return heatByGun.computeIfAbsent(gunShortName,key -> new HeatState());
+	}
+	public float heatOf(String gunShortName) {
+		var state=gunShortName==null?null:heatByGun.get(gunShortName);
+		return state==null?0F:state.heat;
+	}
+	public int lockOf(String gunShortName) {
+		var state=gunShortName==null?null:heatByGun.get(gunShortName);
+		return state==null?0:state.lock;
+	}
+	public void setHeatOf(String gunShortName,float heat,float coolRate) {
+		if(gunShortName==null)return;
+		var state=heatState(gunShortName);
+		state.heat=Math.max(0F,heat);
+		state.coolRate=Math.max(0F,coolRate);
+	}
+	public void setLockOf(String gunShortName,int lock) {
+		if(gunShortName==null)return;
+		heatState(gunShortName).lock=Math.max(0,lock);
+	}
+	public void clearHeat(String gunShortName) {
+		if(gunShortName!=null)heatByGun.remove(gunShortName);
+	}
 	/** Local prediction queues successful shots, independently of cooldown and reload timers. */
 	public final java.util.ArrayDeque<GunStats.Shot> recoilShots = new java.util.ArrayDeque<>();
 	/** Stops a player shooting immediately after swapping weapons. */
@@ -124,6 +160,18 @@ public class PlayerData
 		if(shootClickDelay > 0)
 			shootClickDelay--;
 
+		if(BarrelHeat.enabled() && player != null)
+		{
+			// Cool every gun that carries heat, holstered or not, at the rate it was fired with.
+			heatByGun.entrySet().removeIf(entry -> {
+				var state=entry.getValue();
+				state.heat=BarrelHeat.cool(state.heat,state.coolRate,1);
+				if(state.lock>0)
+					state.lock--;
+				return state.heat<=0F && state.lock<=0;
+			});
+		}
+
 		// Minigun spool: driven up while the trigger is held, then a leaky integrator bleeds it
 		// back down, so it winds up and coasts down rather than switching instantly.
 		if(isShootingRight && !reloadingRight)
@@ -144,6 +192,7 @@ public class PlayerData
 		boltChargeDelay=-1;
 		boltChargeStack=ItemStack.EMPTY;
 		recoilShots.clear();
+		heatByGun.clear();
 		gunAction.reset(); actionGun = null; actionSlot = -1;
 		gunReload.reset();reloadGun=null;reloadGunStack=reloadIncomingMagazine=reloadOutgoingMagazine=ItemStack.EMPTY;
 		compressionHeld=false;compressionGun=null;compressionStack=ItemStack.EMPTY;compressionSlot=-1;
@@ -158,5 +207,13 @@ public class PlayerData
 	public boolean isReloading()
 	{
 		return reloadingRight || reloadingLeft;
+	}
+
+	/** The cooling rate of the gun in a hand, or zero when that hand holds no firearm. */
+	private static float heatCoolRate(ItemStack stack)
+	{
+		return stack.getItem() instanceof com.flansmod.common.types.ItemFlan flan
+				&& flan.type instanceof com.flansmod.common.types.GunType gun
+				? gun.heatCoolRate * MechanicsSettings.heatCoolRateScale() : 0F;
 	}
 }

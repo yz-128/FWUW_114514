@@ -111,9 +111,13 @@ public final class VerifyGunSightState {
         check(foldedNode.name.equals(disabled.shortName) && foldedNode.itemData.getString("id").equals(BuiltInRegistries.ITEM.getKey(disabled.item).toString()),"folding changes node definition AND serialized item id");
         var foldedItem=GunAttachments.item(foldedNode,REGISTRIES);
         check(InfoType.getType(foldedItem)==disabled && foldedItem.getHoverName().getString().equals("my magnifier") && tag(foldedItem).getString("part_metadata").equals("retained"),"folded removal retains exact custom name and original custom metadata");
-        apply(comboStack,combo,GunSightState.NEXT_GROUP);
-        check(GunSightState.selectedSight(GunAttachments.view(combo,comboStack)).type()==disabled
-                && GunSightState.scopeSight(GunAttachments.view(combo,comboStack))==null,"selecting the folded legacy group never enables magnification");
+        int foldedGroup=-1;
+        var savedGroups=GunSightState.groups(folded);
+        for(int i=0;i<savedGroups.size();i++)if(savedGroups.get(i).aiming().type()==disabled)foldedGroup=i;
+        GunAttachments.writeSightState(comboStack,GunAttachments.read(combo,comboStack),foldedGroup);
+        check(GunSightState.selectedSight(GunAttachments.view(combo,comboStack)).type()==red
+                && GunSightState.scopeSight(GunAttachments.view(combo,comboStack))==null,"old folded legacy selection resolves to the forward red-dot camera");
+        check(!GunSightState.canChange(GunAttachments.view(combo,comboStack),GunSightState.NEXT_GROUP),"a stowed magnifier adds no selectable camera line");
         check(!GunSightState.canChange(GunAttachments.view(combo,comboStack),GunSightState.ZOOM),"folded scope has no active zoom control");
         apply(comboStack,combo,GunSightState.TOGGLE);check(GunSightState.scopeSight(GunAttachments.view(combo,comboStack)).type()==enabled,"folded legacy group can deploy magnifier again");
         check(GunAttachments.revision(comboStack)==rev,"fold/unfold never triggers structural take-out revision");
@@ -173,6 +177,60 @@ public final class VerifyGunSightState {
                         GunAttachments.revision(cycleStack),GunAttachments.sightRevision(cycleStack),0,1,changes);
                 check(com.flansmod.client.SightFoldAnimations.matches(event,cycleStack),"client accepts declared three-state animation "+target.shortName);
             }
+        }
+        // Real user assembly: AK74M + SVD side rail with EOTech552 and folded G33 in ONE rail slot.
+        // The pack declares them a cosight pair, but the closed magnifier sits ~0.1 blocks off the
+        // holo's line on this mount, far past the 1e-5 display tolerance.
+        {
+            var eotech=AttachmentType.getAttachment("EOTech552");
+            var rail=AttachmentType.getAttachment("SVDLowSideMount");
+            var realAk=gun("AK74M");
+            var railTree=new ArrayList<List<DefaultAttachment>>();
+            for(var row:realAk.defaultAttachments)railTree.add(new ArrayList<>(row));
+            while(railTree.size()<realAk.slots.length)railTree.add(new ArrayList<>());
+            var side=node(rail,6);
+            side.children.add(node(eotech,0));
+            side.children.add(node(disabled,0));
+            railTree.get(6).add(side);
+            var railStack=new ItemStack(realAk.item);GunAttachments.write(railStack,railTree);
+            var railView=GunAttachments.view(realAk,railStack);
+            var railGroups=GunSightState.groups(railView);
+            int holo=-1;
+            for(int i=0;i<railGroups.size();i++)if(railGroups.get(i).aiming().type()==eotech)holo=i;
+            check(holo>=0,"real SVD-rail assembly exposes the holographic sight group");
+            GunAttachments.writeSightState(railStack,GunAttachments.read(realAk,railStack),holo);
+            railView=GunAttachments.view(realAk,railStack);
+            check(railView.selectedSightGroup==holo,"holographic group can be selected on the real rail");
+            check(GunSightState.canChange(railView,GunSightState.TOGGLE),
+                    "folded G33 is togglable from the holographic group (declared cosight pair, not raw collinearity)");
+            apply(railStack,realAk,GunSightState.TOGGLE);
+            var railAfter=GunAttachments.view(realAk,railStack);
+            check(GunAttachments.nodeAt(GunAttachments.read(realAk,railStack),new int[]{6,0,0,1}).name.equals(enabled.shortName),
+                    "toggling from the holographic group deploys the real G33Enabled definition");
+            check(GunSightState.groups(railAfter).stream().anyMatch(g->g.sights().stream().anyMatch(s->s.type()==enabled)),
+                    "deployed magnifier stays enumerated after the toggle");
+            check(GunSightState.scopeSight(railAfter)!=null && GunSightState.scopeSight(railAfter).type()==enabled,
+                    "flipped-up magnifier becomes the active scope, so its lens renders instead of the black unbound glass");
+            // Deployed in its own group (the hip-fire state in the report): folding it BACK must
+            // still be offered from the holographic group, not only from the magnifier's own group.
+            var upTree=new ArrayList<List<DefaultAttachment>>();
+            for(var row:realAk.defaultAttachments)upTree.add(new ArrayList<>(row));
+            while(upTree.size()<realAk.slots.length)upTree.add(new ArrayList<>());
+            var upSide=node(rail,6);
+            upSide.children.add(node(eotech,0));
+            upSide.children.add(node(enabled,0));
+            upTree.get(6).add(upSide);
+            var upStack=new ItemStack(realAk.item);GunAttachments.write(upStack,upTree);
+            GunAttachments.writeSightState(upStack,GunAttachments.read(realAk,upStack),holo);
+            var upView=GunAttachments.view(realAk,upStack);
+            check(GunSightState.selectedGroup(upView).sights().stream().anyMatch(s->s.type()==eotech),"holographic reticle shares the deployed magnifier line");
+            check(GunSightState.canChange(upView,GunSightState.TOGGLE),
+                    "deployed G33 can be folded back from the holographic group");
+            apply(upStack,realAk,GunSightState.TOGGLE);
+            check(GunAttachments.nodeAt(GunAttachments.read(realAk,upStack),new int[]{6,0,0,1}).name.equals(disabled.shortName),
+                    "folding back restores the real G33Disabled definition");
+            check(GunSightState.scopeSight(GunAttachments.view(realAk,upStack))==null,
+                    "folding back returns the aim to the holographic group, not the stowed optic");
         }
         System.out.println("PASS VerifyGunSightState: "+checks+" assertions");
     }

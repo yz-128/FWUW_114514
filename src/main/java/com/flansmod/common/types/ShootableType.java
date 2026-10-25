@@ -24,7 +24,8 @@ public class ShootableType extends InfoType
 
 	public float damageVsLiving = 1F;
 	public int damageVsDriveable = 1;
-	public boolean breaksGlass = false;
+	/** 1.7.10 ShootableType defaults this to true; packs opt out with "BreaksGlass false". */
+	public boolean breaksGlass = true;
 
 	// ---------------------------------------------------------------- the FMUM damage model
 	//

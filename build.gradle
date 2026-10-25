@@ -24,6 +24,36 @@ sourceSets.main.resources {
     exclude("src/generated/**/.cache") // datagen cache files
 }
 
+// Two interchangeable 0.5.10 clients: the default JAR has the current gunsmith UI;
+// the classic classifier replaces only its screen, preview and language resources.
+// Compile against the current backend so optics, networking and item behavior stay shared.
+sourceSets {
+    classicUi {
+        compileClasspath = sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath = output + sourceSets.main.runtimeClasspath
+    }
+}
+
+def classicJar = tasks.register('classicJar', Jar) {
+    group = 'build'
+    description = 'Assembles the current mod with the preserved classic gunsmith UI.'
+    archiveClassifier.set('classic')
+    dependsOn tasks.named('classicUiClasses')
+    from(sourceSets.classicUi.output)
+    from(sourceSets.main.output) {
+        exclude 'com/flansmod/client/gui/GunModificationScreen.class'
+        exclude 'com/flansmod/client/gui/GunModificationScreen$*.class'
+        exclude 'com/flansmod/client/gui/GunModificationPreview.class'
+        exclude 'com/flansmod/client/gui/GunModificationPreview$*.class'
+        exclude 'assets/flansmod/lang/zh_cn.json'
+        exclude 'assets/flansmod/lang/en_us.json'
+    }
+    manifest.from(tasks.named('jar', Jar).get().manifest)
+}
+tasks.named('assemble') {
+    dependsOn classicJar
+}
+
 repositories {
     // 阿里云镜像优先（国内加速）
     maven { url = 'https://maven.aliyun.com/repository/public' }
@@ -43,7 +73,11 @@ base {
 }
 
 // Mojang ships Java 21 to end users in 1.21.1, so mods should target Java 21.
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+// -PflansJava=<n> builds and runs the dev client on that JDK (default 21). Used only for
+// compatibility experiments such as checking whether the mod runs on a newer runtime; without
+// the property everything stays exactly as before (Java 21 bytecode, Java 21 dev client).
+def flansJavaVersion = (project.findProperty('flansJava') ?: '21').toString().toInteger()
+java.toolchain.languageVersion = JavaLanguageVersion.of(flansJavaVersion)
 
 // The format-neutral pack engine from PackArms is compiled into this build so no extra runtime
 // mod is needed. It is vendored under src/main/java/dev/packarms/core rather than referenced
@@ -85,6 +119,20 @@ neoForge {
             // can be told apart from a pose that missed the frame (or was never applied).
             if (project.hasProperty('flansProbe'))
                 systemProperty 'flansmod.probePose', 'true'
+            // -PflansCompat adds compatibility scenes (gunsmith, ADS, grenade) and a done marker.
+            // -PflansPerf turns on the [RenderPerf] window dump used to compare configurations.
+            if (project.hasProperty('flansCompat'))
+            {
+                systemProperty 'flansmod.compatScenes', 'true'
+                programArguments.addAll '--width', '1280', '--height', '720'
+            }
+            // flansmod.compatExit is intentionally not set: closing the game in-process tears GLFW
+            // down while the integrated server still ticks (NPE in Util.getNanos); the baseline
+            // runner terminates the client after it writes [DebugCompat] done instead.
+            if (project.hasProperty('flansCompatExit'))
+                systemProperty 'flansmod.compatExit', 'true'
+            if (project.hasProperty('flansPerf'))
+                systemProperty 'flansmod.renderPerf', 'true'
         }
 
         server {
@@ -104,6 +152,9 @@ neoForge {
         }
 
         configureEach {
+            // Use copied saves and mods for compatibility runs, keeping interactive run/ intact.
+            if (project.hasProperty('flansGameDir'))
+                gameDirectory.set(file(project.property('flansGameDir')))
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.DEBUG
         }

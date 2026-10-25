@@ -34,7 +34,7 @@ public final class Textures
 	private record Key(String name, boolean fallback) { }
 	private static volatile java.util.Map<Key, java.util.Optional<ResourceLocation>> resolved =
 			new java.util.concurrent.ConcurrentHashMap<>();
-	private record ReticleKey(String name,int frame) { }
+	private record ReticleKey(com.flansmod.common.types.AttachmentType type,String name,int frame) { }
 	private static volatile java.util.Map<ReticleKey, java.util.Optional<ResourceLocation>> reticleResolved =
 			new java.util.concurrent.ConcurrentHashMap<>();
 	/** A fresh map prevents in-flight lookups from publishing into the new resource generation. */
@@ -113,8 +113,9 @@ public final class Textures
 		String name=type.lightStuffTexture;
 		if(name==null || name.isBlank()) return forType(type);
 		int selected=Math.clamp(frame,0,Math.max(0,type.lightTextureCount-1));
-		return reticleResolved.computeIfAbsent(new ReticleKey(name,selected),
-			key->java.util.Optional.ofNullable(forReticle(type,selected,Textures::has))).orElse(null);
+		return reticleResolved.computeIfAbsent(new ReticleKey(type,name,selected),
+			key->java.util.Optional.ofNullable(ReticleResources.source(type,selected).isPresent()
+					?ReticleResources.texture(type,selected):forReticle(type,selected,Textures::has))).orElse(null);
 	}
 
 	public static ResourceLocation forReticle(com.flansmod.common.types.AttachmentType type,int frame,

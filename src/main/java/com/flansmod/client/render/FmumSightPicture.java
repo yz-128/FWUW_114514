@@ -13,6 +13,22 @@ public final class FmumSightPicture {
 	public static float pupilDistance(ModelGeometry.Model model,float scale,Vector3f eye) {
 		return Math.max(.001F,vector(model,"pupilRefCenter",0,0,0).mul(scale).distance(eye));
 	}
+	/** A legacy solid glow smaller than one pixel can fall between all four central samples.
+	 * Preserve its angular size once it is readable; only lift tiny geometry to two pixels. */
+	public static float stableReticleScale(com.flansmod.client.model.loader.BakedRig dot,
+			org.joml.Matrix4f clipFromSight,Vector3f hit,float authored,int width,int height) {
+		if(dot==null || clipFromSight==null || hit==null || !Float.isFinite(authored) || authored<=0 || width<=0 || height<=0)return authored;
+		var clip=new org.joml.Matrix4f(clipFromSight).translate(hit).scale(1,authored,authored);
+		float minX=Float.POSITIVE_INFINITY,minY=minX,maxX=Float.NEGATIVE_INFINITY,maxY=maxX;
+		for(int i=0;i<8;i++) {
+			var point=clip.transform(new org.joml.Vector4f((i&1)==0?dot.minX:dot.maxX,(i&2)==0?dot.minY:dot.maxY,(i&4)==0?dot.minZ:dot.maxZ,1));
+			if(!point.isFinite() || point.w<=1E-6F)return authored;
+			float x=point.x/point.w*width*.5F,y=point.y/point.w*height*.5F;
+			minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+		}
+		float pixels=Math.max(maxX-minX,maxY-minY);
+		return Float.isFinite(pixels)&&pixels>1E-6F&&pixels<2?authored*(2/pixels):authored;
+	}
 	/** Keep the definition's axis whenever it can see its own authored reticle. Some old packs
 	 * reuse a sight mesh with an AimCenter outside its aperture; use that aperture's area centre
 	 * only in that invalid case. No definition or mount is changed. */

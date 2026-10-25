@@ -1,5 +1,6 @@
 import com.flansmod.common.TextDecoding;
 import com.flansmod.common.types.*;
+import com.flansmod.client.render.ScopeMagnification;
 
 import java.nio.file.*;
 import java.util.*;
@@ -20,6 +21,17 @@ public final class VerifyScopeZoom {
     private static int checks, failures;
 
     public static void main(String[] args) throws Exception {
+        squareCrop();
+        for(double power:new double[]{1,1.55,3.5,4,4.875,7}) {
+            check("normal world is unzoomed with an independent scope " + power,
+                    ScopeMagnification.worldZoom(power,true,true,false)==1);
+            check("secondary scope camera keeps declared power " + power,
+                    ScopeMagnification.worldZoom(power,true,true,true)==power);
+            check("shader compatibility keeps the working world zoom " + power,
+                    ScopeMagnification.worldZoom(power,true,false,false)==power);
+            check("direct sights retain their world camera zoom " + power,
+                    ScopeMagnification.worldZoom(power,false,true,false)==power);
+        }
         Path attachments = Path.of(args[0], "attachments");
 
         expect(attachments, "PU35RifleScope", "EFTRAtt.PSO1Glass", "EFTRAtt.eftBlackMask",
@@ -69,6 +81,28 @@ public final class VerifyScopeZoom {
 
         System.out.println("VerifyScopeZoom: " + checks + " declared-magnification checks, " + failures + " failures");
         if (failures > 0) System.exit(1);
+    }
+
+    private static void squareCrop() {
+        // A 90-degree vertical camera has a unit-height half span at depth 1. Cropping a
+        // 960x1920 image to 960x960 leaves half of that span: 2*atan(.5) = 53.130102... degrees.
+        check("portrait crop uses the retained angular span",
+                Math.abs(ScopeMagnification.squareImageFov(90,960,1920)-53.13010235415598)<1E-10);
+        check("landscape crop preserves vertical FOV",Math.abs(ScopeMagnification.squareImageFov(90,1920,960)-90)<1E-10);
+        check("square image preserves FOV",Math.abs(ScopeMagnification.squareImageFov(70,960,960)-70)<1E-10);
+        for(int[] size:new int[][]{{1920,1080},{720,1280},{960,960}})for(double fov:new double[]{8,17.5,70,100}) {
+            double image=ScopeMagnification.squareImageFov(fov,size[0],size[1]);
+            double reconstructed=ScopeMagnification.squareRenderFov(image,size[0],size[1]);
+            check("crop/render inverse "+Arrays.toString(size)+" fov="+fov,Math.abs(reconstructed-fov)<1E-10);
+            double render=ScopeMagnification.squareRenderFov(fov,size[0],size[1]);
+            check("render/crop inverse "+Arrays.toString(size)+" fov="+fov,
+                    Math.abs(ScopeMagnification.squareImageFov(render,size[0],size[1])-fov)<1E-10);
+        }
+        for(int[] size:new int[][]{{0,1080},{720,0},{-1,960}})
+            check("invalid crop dimensions rejected "+Arrays.toString(size),
+                    Double.isNaN(ScopeMagnification.squareImageFov(70,size[0],size[1])));
+        for(double fov:new double[]{Double.NaN,Double.POSITIVE_INFINITY,0,-1,180})
+            check("invalid crop FOV rejected "+fov,Double.isNaN(ScopeMagnification.squareImageFov(fov,960,960)));
     }
 
     private static void expect(Path dir, String shortName, String glass, String mask,

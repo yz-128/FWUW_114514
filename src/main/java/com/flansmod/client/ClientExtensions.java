@@ -95,5 +95,9 @@ public final class ClientExtensions
 	{
 		event.registerEntityRenderer(com.flansmod.common.FlansMod.BULLET.get(),
 				com.flansmod.client.render.EntityBulletRenderer::new);
+		event.registerEntityRenderer(com.flansmod.common.FlansMod.GRENADE.get(),
+				com.flansmod.client.render.GrenadeRenderer::new);
+		event.registerEntityRenderer(com.flansmod.common.FlansMod.GUN_ITEM.get(),
+				com.flansmod.client.render.GunItemRenderer::new);
 	}
 }

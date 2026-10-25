@@ -24,8 +24,53 @@ public final class VerifyGunModificationView {
             collect(points,ModelCache.rigFor(type,type.modelScale),transform);nodes(points,type,node.children,transform);
         }
     }
+    static ModifiableType.AttachableSlot mount(float x,float y,float z,float rotation) {
+        var slot=new ModifiableType.AttachableSlot();slot.x=x;slot.y=y;slot.z=z;slot.rotate=rotation;return slot;
+    }
+    static void checkMountProjection(GunModificationView.Frame frame) {
+        var gun=new GunType(new TypeFile(EnumType.gun,"projection-fixture",false));
+        var outer=new AttachmentType(new TypeFile(EnumType.attachment,"projection-outer",false));
+        var inner=new AttachmentType(new TypeFile(EnumType.attachment,"projection-inner",false));
+        outer.shortName="__projection_outer";inner.shortName="__projection_inner";
+        try {
+            // Deliberately unequal mesh scales must not scale block-space mount coordinates.
+            gun.modelScale=.2F;outer.modelScale=4F;inner.modelScale=.07F;
+            gun.slots=new ModifiableType.AttachableSlot[]{mount(.2F,.1F,-.05F,90)};
+            outer.slots=new ModifiableType.AttachableSlot[]{mount(-.4F,.25F,.3F,-45)};
+            inner.slots=new ModifiableType.AttachableSlot[]{mount(.15F,-.12F,.07F,0)};
+            var unrelated=new ModifiableType.DefaultAttachment();unrelated.name=outer.shortName;unrelated.slot=0;unrelated.pos=-.8F;
+            var parent=new ModifiableType.DefaultAttachment();parent.name=outer.shortName;parent.slot=0;parent.pos=.31F;
+            var child=new ModifiableType.DefaultAttachment();child.name=inner.shortName;child.slot=0;child.pos=-.17F;parent.children.add(child);
+            List<List<ModifiableType.DefaultAttachment>> tree=List.of(List.of(unrelated,parent));
+            int[] path={0,1,0,0};var unchanged=new Matrix4f(frame.matrix());
+            for(float rail:new float[]{0,.09F,.27F}) {
+                // Independent scalar rotations: inner mount -> -45 degree parent -> 90 degree root.
+                float c=(float)java.lang.Math.sqrt(.5),localY=-.12F,localZ=.07F;
+                float y=c*localY+c*localZ+.25F,z=-c*localY+c*localZ+.3F;
+                var expected=new Vector3f(.15F+rail-.4F-.17F+.2F+.31F,-z+.1F,y-.05F);
+                frame.matrix().transformPosition(expected);
+                var screen=GunModificationView.projectMount(frame,gun,tree,path,0,rail);
+                check(screen!=null && screen.distance(expected)<.0001F,"actual GUI frame projects nested rolled mount with rail offset and sibling identity");
+            }
+            var root=GunModificationView.projectMount(frame,gun,tree,new int[0],0,.09F);
+            var expectedRoot=frame.matrix().transformPosition(new Vector3f(.29F,.1F,-.05F));
+            check(root!=null && root.distance(expectedRoot)<.0001F,"root interface uses identity parent without applying its own roll to its origin");
+            check(frame.matrix().equals(unchanged),"projecting nodes preserves the current preview frame");
+            check(Arrays.equals(path,new int[]{0,1,0,0}) && parent.pos==.31F && child.pos==-.17F,"projecting nodes preserves real assembly and selection path");
+            check(GunModificationView.projectMount(frame,gun,tree,new int[]{0},0,0)==null,"odd mount path is rejected");
+            check(GunModificationView.projectMount(frame,gun,tree,new int[]{0,2},0,0)==null,"missing sibling is rejected");
+            check(GunModificationView.projectMount(frame,gun,tree,path,1,0)==null,"missing nested slot is rejected");
+            check(GunModificationView.projectMount(frame,gun,tree,path,0,Float.NaN)==null,"nonfinite rail is rejected");
+            inner.slots[0].y=Float.POSITIVE_INFINITY;
+            check(GunModificationView.projectMount(frame,gun,tree,path,0,0)==null,"nonfinite authored mount is rejected");
+        } finally {
+            AttachmentType.attachments.remove(outer);AttachmentType.attachments.remove(inner);
+            InfoType.infoTypes.remove(gun);InfoType.infoTypes.remove(outer);InfoType.infoTypes.remove(inner);
+        }
+    }
     public static void main(String[] args)throws Exception {
         var pack=new OfflinePack(Path.of(args[0]));pack.readTypes();int guns=0;
+        GunModificationView.Frame projectionFrame=null;
         for(var type:pack.types)if(type instanceof GunType gun && gun.itsType!=GunType.GunItsType.MAG && !gun.magazineNames.isEmpty()) {
             var rig=ModelCache.rigFor(gun,gun.modelScale);if(rig==null || rig.quads.isEmpty())continue;
             var points=new ArrayList<Vector3f>();collect(points,rig,new Matrix4f());
@@ -34,6 +79,7 @@ public final class VerifyGunModificationView {
                 int x=17,y=23,w=size[0],h=size[1];
                 var frame=GunModificationView.frame(points,angle[0],angle[1],1F,x,y,w,h);
                 check(frame!=null && Float.isFinite(frame.scale()) && frame.scale()>0,"finite framing "+gun.shortName);
+                if(projectionFrame==null)projectionFrame=frame;
                 float minX=Float.POSITIVE_INFINITY,minY=minX,maxX=Float.NEGATIVE_INFINITY,maxY=maxX;
                 for(var point:points) {
                     var screen=frame.matrix().transformPosition(new Vector3f(point));
@@ -53,6 +99,7 @@ public final class VerifyGunModificationView {
             guns++;
         }
         check(guns==31,"31 EFT firearm assemblies checked");
+        checkMountProjection(projectionFrame);
         var rig=new BakedRig();rig.quads.add(new BakedRig.Quad(new float[][]{{0,0,0},{1,0,0},{1,1,0},{0,1,0}},
                 new float[][]{{0,0},{1,0},{1,1},{0,1}},0,0,1));
         var pose=new PoseStack();pose.scale(100,-100,100);pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(45));
@@ -64,7 +111,7 @@ public final class VerifyGunModificationView {
         for(Vector3f n:List.of(new Vector3f(1,0,0),new Vector3f(0,1,0),new Vector3f(0,0,1),new Vector3f(-1,-2,-3))) {
             float shade=GunModificationView.shade(n);check(shade>=.70F && shade<=1.00001F,"bounded studio face shading");
         }
-        System.out.println("PASS: "+checks+" assertions; 31 complete EFT assemblies, 3 viewport sizes, 4 rotations, VPO101 sizing, centering, actual transformed vertex normals and studio lighting. No OpenGL/game executed.");
+        System.out.println("PASS: "+checks+" assertions; 31 complete EFT assemblies, 3 viewport sizes, 4 rotations, VPO101 sizing, centering, actual transformed vertex normals, studio lighting and nested mount/rail projection. No OpenGL/game executed.");
     }
     static final class Recorder implements VertexConsumer {
         final List<Vector3f> positions=new ArrayList<>();Vector3f normal;int lowColor=255,highColor=0;

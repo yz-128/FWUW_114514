@@ -151,6 +151,16 @@ public class GunType extends ModifiableType implements Cloneable
 	/** Time to aim down the sights, in seconds (FMUM divides it into the pose blend). */
 	public float aimTimeConst = 0F, sightSwitchConst = 0F;
 
+	/**
+	 * Barrel heat (default on, see {@link com.flansmod.common.BarrelHeat}): per-shot heat, per-tick
+	 * cooling, the fire-rate delay at a full barrel and how long a full barrel locks the trigger.
+	 * Packs may override every value; the defaults are deliberately gentle, and the fire rate only
+	 * drops by 10% at a completely full barrel.
+	 */
+	public float heatPerShot = 0.012F, heatCoolRate = 0.0035F;
+	public float heatRateMult = 1.1F;
+	public int heatLockTicks = 40;
+
 	/** The secondary fire's own sound set, when the pack gives one. */
 	public String secondaryShootSound;
 	public int secondaryShootSoundRange = -1;
@@ -382,6 +392,10 @@ public class GunType extends ModifiableType implements Cloneable
 				case "ReloadTime" -> reloadTime = toInt(split[1]);
 				case "Recoil" -> recoil = toInt(split[1]);
 				case "Knockback" -> knockback = toFloat(split[1]);
+				case "HeatPerShot" -> heatPerShot = toFloat(split[1]);
+				case "HeatCoolRate" -> heatCoolRate = toFloat(split[1]);
+				case "HeatRateMult" -> heatRateMult = toFloat(split[1]);
+				case "HeatLockTicks" -> heatLockTicks = toInt(split[1]);
 				case "Accuracy", "Spread" -> {
 					bulletSpread = toFloat(split[1]);
 					// Shotguns write a second value: the spread while aiming. FMUM keeps both;
@@ -834,6 +848,16 @@ public class GunType extends ModifiableType implements Cloneable
 			}
 		}
 		return modes.isEmpty() ? mode : modes.get(0);
+	}
+
+	/**
+	 * The stack's current mode as 1.7.10's {@code fireModeNum}: its index in the pack's own mode
+	 * list. RenderSwitch slices the selector array with exactly this number.
+	 */
+	public int fireModeIndex(ItemStack stack)
+	{
+		int at = modes.indexOf(modeFor(stack));
+		return at < 0 ? 0 : at;
 	}
 
 	/** Writes the selected mode onto the stack. */

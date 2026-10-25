@@ -73,9 +73,183 @@ public final class BakedRig
 	 */
 	public ModelGeometry.Model animation;
 
+	/**
+	 * The fire-mode selector, sliced the way {@code ModelGun.renderSwitch} slices it.
+	 *
+	 * <p>1.7.10 keeps every selector position in one {@code switchModel} array and draws only
+	 * {@code [fireModeNum * numSwitchModel, +numSwitchModel)}; the rest are the meshes for the
+	 * other positions (safe / semi / auto) and must not be drawn at the same time. The bake keeps
+	 * the per-renderer quads so the renderer can reproduce that slice.
+	 */
+	public int switchModelGroups;
+	public int slideSwitchModelGroups;
+	private final java.util.List<java.util.List<Quad>> switchRendererQuads = new java.util.ArrayList<>();
+	private final java.util.List<java.util.List<Quad>> slideSwitchRendererQuads = new java.util.ArrayList<>();
+	private java.util.List<java.util.List<Quad>> switchSlices = java.util.List.of();
+	private java.util.List<java.util.List<Quad>> slideSwitchSlices = java.util.List.of();
+	private java.util.List<java.util.Set<Quad>> hiddenSwitchSlices = java.util.List.of();
+	public record EmissivePass(List<Quad> quads, ModelGeometry.GlowLight light) { }
+	private record EmissiveState(List<Quad> body, List<EmissivePass> passes,
+			java.util.Set<Quad> visible, Map<Quad, ModelGeometry.GlowLight> materials) { }
+	private record MaterialProfile(List<ModelGeometry.GlowDraw> body, List<ModelGeometry.GlowDraw> glow) { }
+	private List<EmissiveState> emissiveStates = List.of();
+
+	/** Ordinary attachment surface; excludes only geometry the same render method draws glowing. */
+	public List<Quad> attachmentBody(int fireMode)
+	{
+		if(!emissiveStates.isEmpty()) return emissiveStates.get(fireMode & 255).body();
+		var body = quadsByPart.get("attachmentModel");
+		return body == null || body.isEmpty() ? quads : body;
+	}
+	/** Legacy lightmap passes, already resolved to exact renderer ranges for the current mode. */
+	public List<EmissivePass> emissivePasses(int fireMode)
+	{
+		return emissiveStates.isEmpty() ? List.of() : emissiveStates.get(fireMode & 255).passes();
+	}
+	public boolean attachmentVisible(Quad quad, int fireMode)
+	{
+		return emissiveStates.isEmpty() ? attachmentBody(fireMode).contains(quad)
+				: emissiveStates.get(fireMode & 255).visible().contains(quad);
+	}
+	public boolean hasEmissiveProfile() { return !emissiveStates.isEmpty(); }
+	/** Identity query for moving renderer pieces and other surface renderers. Null is ordinary light. */
+	public ModelGeometry.GlowLight emission(Quad quad, int fireMode)
+	{
+		return emissiveStates.isEmpty() ? null : emissiveStates.get(fireMode & 255).materials().get(quad);
+	}
+	public ModelGeometry.GlowLight emissiveLight(Quad quad, int fireMode) { return emission(quad, fireMode); }
+
+	private void cacheEmissivePasses(ModelGeometry.Model model)
+	{
+		if(model.emissiveDrawsByMode.size() != 256) return;
+		var fallbackBody = attachmentBody(0);
+		var states = new ArrayList<EmissiveState>(256);
+		var shared = new java.util.HashMap<MaterialProfile, EmissiveState>();
+		for(int mode = 0; mode < 256; mode++) {
+			var profile = new MaterialProfile(model.normalDrawsByMode.size() == 256 ? model.normalDrawsByMode.get(mode) : null,
+					model.emissiveDrawsByMode.get(mode));
+			states.add(shared.computeIfAbsent(profile, material -> {
+				var body = material.body() == null ? fallbackBody : new ArrayList<Quad>();
+				if(material.body() != null) for(var draw : material.body()) body.addAll(materialFaces(draw));
+				var passes = new ArrayList<EmissivePass>();
+				var glowing = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Quad, Boolean>());
+				var materials = new java.util.IdentityHashMap<Quad, ModelGeometry.GlowLight>();
+				for(var draw : material.glow())
+				{
+					var faces = materialFaces(draw);
+					if(!faces.isEmpty()) {
+						passes.add(new EmissivePass(List.copyOf(faces), draw.light()));
+						glowing.addAll(faces);
+						for(var face : faces) materials.put(face, draw.light());
+					}
+				}
+				var visible = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Quad, Boolean>());
+				visible.addAll(body); visible.addAll(glowing);
+				return new EmissiveState(body.stream().filter(quad -> !glowing.contains(quad)).toList(), List.copyOf(passes),
+						java.util.Collections.unmodifiableSet(visible), java.util.Collections.unmodifiableMap(materials));
+			}));
+		}
+		emissiveStates = List.copyOf(states);
+	}
+	private List<Quad> materialFaces(ModelGeometry.GlowDraw draw)
+	{
+		if(draw.last() < 0) return quadsByPart.getOrDefault(draw.field(), List.of());
+		var faces = new ArrayList<Quad>();
+		String prefix = draw.field() + "#";
+		quadsByRenderer.entrySet().stream().filter(entry -> entry.getKey().startsWith(prefix))
+				.sorted(java.util.Comparator.comparingInt(entry -> Integer.parseInt(entry.getKey().substring(prefix.length()))))
+				.forEach(entry -> {
+					int renderer = Integer.parseInt(entry.getKey().substring(prefix.length()));
+					if(renderer >= draw.first() && renderer < draw.last()) faces.addAll(entry.getValue());
+				});
+		return faces;
+	}
+
 	public float width() { return maxX - minX; }
 	public float height() { return maxY - minY; }
 	public float depth() { return maxZ - minZ; }
+
+	/** How many {@code switchModel} renderers one fire-mode state uses; 0 when it has no selector. */
+	public int switchModelsPerState()
+	{
+		int count = switchRendererQuads.size();
+		return switchModelGroups > 0 && count > 0 && count % switchModelGroups == 0
+				? count / switchModelGroups : 0;
+	}
+
+	/** The selector quads one fire mode draws, or null when the model has no selector. */
+	public java.util.List<Quad> switchModelSlice(int fireMode)
+	{
+		return slice(switchSlices, fireMode);
+	}
+
+	public java.util.List<Quad> slideSwitchModelSlice(int fireMode)
+	{
+		return slice(slideSwitchSlices, fireMode);
+	}
+
+	private static java.util.List<Quad> slice(java.util.List<java.util.List<Quad>> slices, int fireMode)
+	{
+		if(slices.isEmpty())
+			return null;
+		return slices.get(Math.max(0, Math.min(slices.size() - 1, fireMode)));
+	}
+
+	/** Selector geometry never changes after baking; render and picking share these snapshots. */
+	private static java.util.List<java.util.List<Quad>> selectorSlices(
+			java.util.List<java.util.List<Quad>> renderers, int states)
+	{
+		if(states <= 0 || renderers.isEmpty() || renderers.size() % states != 0)
+			return java.util.List.of();
+		int perState = renderers.size() / states;
+		var slices = new java.util.ArrayList<java.util.List<Quad>>(states);
+		for(int state = 0; state < states; state++)
+		{
+			var quads = new java.util.ArrayList<Quad>();
+			for(int i = state * perState; i < (state + 1) * perState; i++)
+				quads.addAll(renderers.get(i));
+			slices.add(java.util.List.copyOf(quads));
+		}
+		return java.util.List.copyOf(slices);
+	}
+
+	private void cacheSelectorSlices()
+	{
+		switchSlices = selectorSlices(switchRendererQuads, switchModelGroups);
+		slideSwitchSlices = selectorSlices(slideSwitchRendererQuads, slideSwitchModelGroups);
+		var hidden = new java.util.ArrayList<java.util.Set<Quad>>(switchSlices.size());
+		for(var slice : switchSlices)
+		{
+			var shown = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Quad, Boolean>());
+			shown.addAll(slice);
+			var excluded = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Quad, Boolean>());
+			for(var group : switchRendererQuads)
+				for(var quad : group)
+					if(!shown.contains(quad)) excluded.add(quad);
+			hidden.add(java.util.Collections.unmodifiableSet(excluded));
+		}
+		hiddenSwitchSlices = java.util.List.copyOf(hidden);
+	}
+
+	/**
+	 * The selector quads the given fire mode must not draw, by identity.
+	 *
+	 * <p>Used by the modification preview, which draws a whole rig at once: filtering there keeps
+	 * the preview matching what {@code renderSwitch} would have drawn. {@code fireMode < 0} asks
+	 * for no filtering at all, which is what the offline preview checks use.
+	 */
+	public java.util.Set<Quad> switchModelHidden(int fireMode)
+	{
+		if(fireMode < 0 || hiddenSwitchSlices.isEmpty())
+			return java.util.Set.of();
+		return hiddenSwitchSlices.get(Math.min(hiddenSwitchSlices.size() - 1, fireMode));
+	}
+
+	/** How many {@code switchModel} renderers the model declares, for the offline checks. */
+	public int switchModelRendererCount() { return switchRendererQuads.size(); }
+
+	/** The switchModel#index key is filled only for real renderers; 0 .. n is the array. */
+	public int slideSwitchModelRendererCount() { return slideSwitchRendererQuads.size(); }
 
 	// ---------------------------------------------------------------- the old renderer's tables
 
@@ -239,6 +413,27 @@ public final class BakedRig
 			rig.skippedPrisms += part.prisms.size();
 		}
 
+		// Index the fire-mode selector arrays by renderer, so a renderer can draw the slice that
+		// belongs to the current mode (ModelGun.renderSwitch's job in 1.7.10).
+		rig.switchModelGroups = model.switchModelGroups;
+		rig.slideSwitchModelGroups = model.slideSwitchModelGroups;
+		for(int i = 0; ; i++)
+		{
+			var quads = rig.quadsByRenderer.get("switchModel#" + i);
+			if(quads == null || quads.isEmpty())
+				break;
+			rig.switchRendererQuads.add(quads);
+		}
+		for(int i = 0; ; i++)
+		{
+			var quads = rig.quadsByRenderer.get("slideSwitchModel#" + i);
+			if(quads == null || quads.isEmpty())
+				break;
+			rig.slideSwitchRendererQuads.add(quads);
+		}
+
+		rig.cacheSelectorSlices();
+		rig.cacheEmissivePasses(model);
 		return rig;
 	}
 

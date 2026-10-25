@@ -13,6 +13,8 @@ import java.util.*;
 public final class GunAttachments {
     public static final String KEY = "flansmodAttachments", REVISION = "flansmodAttachmentRevision";
     public static final String SIGHT_REVISION = "flansmodSightRevision", SIGHT_GROUP = "flansmodSelectedSightGroup";
+    /** Tactical device switches, stored on the gun stack like the selected sight group. */
+    public static final String LIGHT_ON = "flansmodLightOn", LASER_ON = "flansmodLaserOn";
     private static final String PART_ZOOM = "flansmodSightZoomStep", PART_DOT = "flansmodSightDotFrame";
     public static final int MAX_DEPTH = 8, MAX_NODES = 256;
     /** FMUM's global MaxAttachments caps EACH slot/rail, even if the pack omits its local cap. */
@@ -28,6 +30,19 @@ public final class GunAttachments {
     public static int sightRevision(ItemStack stack) {
         var data = stack.get(DataComponents.CUSTOM_DATA);
         return data == null ? 0 : data.copyTag().getInt(SIGHT_REVISION)&0x7fff;
+    }
+    public static boolean isLightOn(ItemStack stack) { return flag(stack, LIGHT_ON); }
+    public static boolean isLaserOn(ItemStack stack) { return flag(stack, LASER_ON); }
+    private static boolean flag(ItemStack stack, String key) {
+        var data = stack.get(DataComponents.CUSTOM_DATA);
+        return data != null && data.copyTag().getBoolean(key);
+    }
+    public static void setTacticalState(ItemStack stack, boolean light, boolean laser) {
+        var data = stack.get(DataComponents.CUSTOM_DATA);
+        var tag = data == null ? new CompoundTag() : data.copyTag();
+        tag.putBoolean(LIGHT_ON, light);
+        tag.putBoolean(LASER_ON, laser);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
     }
     public static List<List<DefaultAttachment>> read(ModifiableType owner, ItemStack stack) {
         if(stack == null || stack.isEmpty()) return owner.defaultAttachments;
@@ -157,6 +172,26 @@ public final class GunAttachments {
         if(!slotList(owner.typeWhitelist,slot).isEmpty()) return contains(owner.typeWhitelist.get(slot),part.attachmentType)
                 || originalEftMdrMuzzle(owner,slot,part);
         return !contains(slotList(owner.typeBlacklist,slot),part.attachmentType);
+    }
+
+    /**
+     * The guns that can take this attachment, for the item tooltip.
+     *
+     * <p>1.7.10 did not compute this: it printed the definition's {@code Description} line, which
+     * the packs use to spell the compatible weapons out ("Need:AK74 AK74N ..."). The port keeps the
+     * description as well, but a real computed list is what the "fits onto" line was reaching for —
+     * and unlike the attachment-parent list it previously used, it names weapons, not parts.
+     */
+    public static java.util.List<com.flansmod.common.types.GunType> gunsAccepting(
+            com.flansmod.common.types.AttachmentType part) {
+        var result = new java.util.ArrayList<com.flansmod.common.types.GunType>();
+        if (part == null) return result;
+        for (var type : com.flansmod.common.types.InfoType.infoTypes) {
+            if (!(type instanceof com.flansmod.common.types.GunType gun)) continue;
+            for (int slot = 0; slot < gun.slots.length; slot++)
+                if (allowed(gun, slot, part)) { result.add(gun); break; }
+        }
+        return result;
     }
 
     /** EFT 1.5.3 explicitly ships this default barrel/muzzle pair, but names its interface twice.

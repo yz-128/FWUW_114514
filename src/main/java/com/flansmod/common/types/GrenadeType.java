@@ -41,6 +41,11 @@ public class GrenadeType extends ShootableType
 	/** Smoke and flash effects, and the crowd-control variants. */
 	public String smokeEffect;
 	public float smokeRadius = 0F;
+	/** How long the smoke keeps applying its effects, in ticks; 1.7.10's {@code SmokeTime}. */
+	public int smokeTime = 0;
+	/** {@code SmokeEffect <id> <duration> <amplifier>}, in the 1.7.10 numeric potion ids. */
+	public record SmokePotion(int id,int duration,int amplifier) { }
+	public final java.util.List<SmokePotion> smokePotions = new java.util.ArrayList<>();
 	/** Whether the thrown grenade tumbles in flight. */
 	public boolean spinWhenThrown = false;
 	public boolean flashBang = false;
@@ -103,7 +108,13 @@ public class GrenadeType extends ShootableType
 				case "PrimeDelay", "TriggerDelay" -> primeDelay = toInt(split[1]);
 				case "HitEntityDamage" -> hitEntityDamage = toFloat(split[1]);
 
-				case "SmokeEffect" -> smokeEffect = split[1];
+				case "SmokeEffect" ->
+				{
+					// FMUM: SmokeEffect <id> <duration> <amplifier>; the packs still use 1.7.10 ids.
+					if(split.length >= 4) smokePotions.add(new SmokePotion(toInt(split[1]),toInt(split[2]),toInt(split[3])));
+					else smokeEffect = split[1];
+				}
+				case "SmokeTime" -> smokeTime = toInt(split[1]);
 				case "SmokeRadius" -> smokeRadius = toFloat(split[1]);
 
 				case "FlashBang" -> flashBang = toBool(split[1]);

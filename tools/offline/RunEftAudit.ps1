@@ -24,6 +24,9 @@ try {
     Set-Content -LiteralPath 'build/offline-javac-args.txt' -Encoding ASCII -Value ('-cp ' + $classpath)
     Set-Content -LiteralPath 'build/offline-java-args.txt' -Encoding ASCII -Value ('-cp build/offline;' + $classpath)
     Set-Content -LiteralPath 'build/offline-data-java-args.txt' -Encoding ASCII -Value ('-cp build/offline-data;build/offline;' + $classpath)
+    New-Item -ItemType Directory -Path 'build/offline-data' -Force | Out-Null
+    & javac -encoding UTF-8 '@build/offline-javac-args.txt' -d 'build/offline-data' (Join-Path $PSScriptRoot 'data-stubs/net/neoforged/neoforge/common/util/flag/FeatureFlagLoader.java')
+    if ($LASTEXITCODE -ne 0) { throw 'Offline data fixture compilation failed.' }
     $sources = @('OfflinePack.java','FPPreview.java','TPPreview.java','MaterialAudit.java','VerifyLegacyRender.java','VerifyModelTransforms.java','VerifyGunActions.java','VerifyGunModification.java','VerifyGunModificationView.java','VerifyGunAttachmentCatalog.java','VerifyMagazineData.java','VerifyReloadRendering.java','VerifyReloadInput.java','VerifyRecoilStats.java','VerifyAmmoDetails.java','VerifyHoldingArms.java','VerifyMuzzleEffects.java','VerifyEjections.java','VerifySounds.java','VerifyWorldEffects.java','VerifyMuzzleGlow.java','VerifyShaderMuzzleLighting.java','VerifyBulletBlocks.java','VerifySoundBundles.java','VerifyScopeZoom.java','VerifySightPicture.java','VerifyScopeReticles.java','VerifySightAlignment.java','VerifyGunSightState.java','VerifyCasingPhysics.java','VerifyRestWallShape.java','CrossPackAudit.java') |
         ForEach-Object { Join-Path $PSScriptRoot $_ }
     $sources += Join-Path $PSScriptRoot 'stubs/com/flansmod/common/FlansMod.java'
@@ -57,9 +60,6 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Casing physics contracts failed; see casing_physics_verification.log.' }
     & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyRestWallShape *> 'reports/eft/rest_wall_shape_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Muzzle-against-wall shape contracts failed; see rest_wall_shape_verification.log.' }
-    New-Item -ItemType Directory -Path 'build/offline-data' -Force | Out-Null
-    & javac -encoding UTF-8 '@build/offline-javac-args.txt' -d 'build/offline-data' (Join-Path $PSScriptRoot 'data-stubs/net/neoforged/neoforge/common/util/flag/FeatureFlagLoader.java')
-    if ($LASTEXITCODE -ne 0) { throw 'Offline data fixture compilation failed.' }
     & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyScopeReticles $pack *> 'reports/eft/scope_reticle_verification.log'
     if ($LASTEXITCODE -ne 0) { throw 'Scope reticle composition contracts failed; see scope_reticle_verification.log.' }
     & java '-Dlog4j.configurationFile=tools/offline/log4j2.xml' '-Djava.awt.headless=true' '-Djoml.useUnsafe=false' '@build/offline-data-java-args.txt' VerifyBulletBlocks $pack *> 'reports/eft/bullet_blocks_verification.log'

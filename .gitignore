@@ -57,3 +57,13 @@ repo/
 /normify-flansmod/outline.md
 /normify-flansmod/receipt.json
 /normify-flansmod/normify.html
+
+### Local verification, backups and media ###
+# Curated Markdown reports stay in Git; generated evidence and copied pack data do not.
+/backups/
+/deliverables/
+/net/
+/reports/eft/*/
+/reports/collaboration/
+/tools/**/__pycache__/
+/tools/**/*.pyc

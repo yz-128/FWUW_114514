@@ -17,32 +17,39 @@ public final class SightFoldRenderer {
     private static boolean visible(BakedRig rig,String key) {
         var body=rig.quadsByPart.get("attachmentModel");return body==null || body.isEmpty() || key.startsWith("attachmentModel#");
     }
+    private static boolean surfaceVisible(BakedRig rig,String key,List<BakedRig.Quad> quads,int mode) {
+        return !quads.isEmpty() && (rig.hasEmissiveProfile()?rig.attachmentVisible(quads.getFirst(),mode):visible(rig,key));
+    }
     private static ResourceLocation skin(AttachmentType type) {
         var result=Textures.of(type.texture,false);
         return result==null?ResourceLocation.withDefaultNamespace("textures/block/white_concrete.png"):result;
     }
     public static boolean render(PoseStack pose,MultiBufferSource buffers,Part part,float phase,
                                  int light,int overlay,boolean mirrored,boolean firstPerson) {
+        return render(pose,buffers,part,phase,light,overlay,mirrored,firstPerson,0);
+    }
+    public static boolean render(PoseStack pose,MultiBufferSource buffers,Part part,float phase,
+                                 int light,int overlay,boolean mirrored,boolean firstPerson,int fireMode) {
         var from=AttachmentType.getAttachment(part.from());var to=AttachmentType.getAttachment(part.to());
         if(from==null || to==null)return false;
         var a=ModelCache.rigFor(from,from.modelScale);var b=ModelCache.rigFor(to,to.modelScale);
         if(a==null)return false;
         if(b==null) {
-            var body=a.quadsByPart.getOrDefault("attachmentModel",a.quads);
-            draw(pose,buffers,skin(from),body,new Matrix4f(),1,light,overlay,mirrored,false);return true;
+            endpoint(pose,buffers,skin(from),a,fireMode,light,overlay,mirrored);return true;
         }
         var plan=SightFoldGeometry.plan(a,b);
-        if(phase>=1)draw(pose,buffers,skin(to),b.quadsByPart.getOrDefault("attachmentModel",b.quads),new Matrix4f(),1,light,overlay,mirrored,false);
+        if(phase>=1)endpoint(pose,buffers,skin(to),b,fireMode,light,overlay,mirrored);
         else for(var track:plan.tracks()) {
-            boolean source=!track.source().isEmpty() && visible(a,track.sourceKey());
-            boolean target=!track.target().isEmpty() && visible(b,track.targetKey());
+            boolean source=surfaceVisible(a,track.sourceKey(),track.source(),fireMode);
+            boolean target=surfaceVisible(b,track.targetKey(),track.target(),fireMode);
             if(track.matched() && source && target) {
-                draw(pose,buffers,skin(from),track.source(),track.pose(phase),1,light,overlay,mirrored,false);
-                if(track.textureChanged() || !skin(from).equals(skin(to)))
-                    drawUv(pose,buffers,skin(to),track.source(),track.target(),track.pose(phase),phase,light,overlay,mirrored,false);
+                drawUv(pose,buffers,skin(from),track.source(),track.source(),track.pose(phase),1,light,overlay,mirrored,false,a,fireMode);
+                if(track.textureChanged() || !skin(from).equals(skin(to)) ||
+                        !java.util.Objects.equals(a.emission(track.source().getFirst(),fireMode),b.emission(track.target().getFirst(),fireMode)))
+                    drawUv(pose,buffers,skin(to),track.source(),track.target(),track.pose(phase),phase,light,overlay,mirrored,false,b,fireMode);
             } else {
-                if(source)draw(pose,buffers,skin(from),track.source(),track.pose(phase),1-phase,light,overlay,mirrored,false);
-                if(target)draw(pose,buffers,skin(to),track.target(),track.targetPose(phase),phase,light,overlay,mirrored,false);
+                if(source)drawUv(pose,buffers,skin(from),track.source(),track.source(),track.pose(phase),1-phase,light,overlay,mirrored,false,a,fireMode);
+                if(target)drawUv(pose,buffers,skin(to),track.target(),track.target(),track.targetPose(phase),phase,light,overlay,mirrored,false,b,fireMode);
             }
         }
         // No magnified image or floating reticle during the gesture. Its black glass follows the hinge.
@@ -58,12 +65,23 @@ public final class SightFoldRenderer {
         }
         return true;
     }
+    private static void endpoint(PoseStack pose,MultiBufferSource buffers,ResourceLocation skin,BakedRig rig,
+                                 int mode,int light,int overlay,boolean mirrored) {
+        drawUv(pose,buffers,skin,rig.attachmentBody(mode),rig.attachmentBody(mode),new Matrix4f(),1,light,overlay,mirrored,false,rig,mode);
+        for(var pass:rig.emissivePasses(mode))
+            drawUv(pose,buffers,skin,pass.quads(),pass.quads(),new Matrix4f(),1,light,overlay,mirrored,false,rig,mode);
+    }
     private static void draw(PoseStack pose,MultiBufferSource buffers,ResourceLocation skin,List<BakedRig.Quad> quads,
                              Matrix4f matrix,float alpha,int light,int overlay,boolean mirrored,boolean black) {
         drawUv(pose,buffers,skin,quads,quads,matrix,alpha,light,overlay,mirrored,black);
     }
     private static void drawUv(PoseStack pose,MultiBufferSource buffers,ResourceLocation skin,List<BakedRig.Quad> quads,
                                List<BakedRig.Quad> uvQuads,Matrix4f matrix,float alpha,int light,int overlay,boolean mirrored,boolean black) {
+        drawUv(pose,buffers,skin,quads,uvQuads,matrix,alpha,light,overlay,mirrored,black,null,0);
+    }
+    private static void drawUv(PoseStack pose,MultiBufferSource buffers,ResourceLocation skin,List<BakedRig.Quad> quads,
+                               List<BakedRig.Quad> uvQuads,Matrix4f matrix,float alpha,int light,int overlay,boolean mirrored,boolean black,
+                               BakedRig materials,int mode) {
         if(alpha<=0 || quads.isEmpty())return;
         var type=black?RenderType.entityTranslucentEmissive(skin):alpha>=1?RenderType.entityCutout(skin):RenderType.entityTranslucent(skin);
         var buffer=buffers.getBuffer(type);pose.pushPose();pose.mulPose(matrix);
@@ -74,10 +92,12 @@ public final class SightFoldRenderer {
                     .cross(new Vector3f(quad.positions()[2]).sub(new Vector3f(quad.positions()[0])));
             if(normal.lengthSquared()<1e-14F)normal.set(quad.nx(),quad.ny(),quad.nz());
             pose.last().normal().transform(normal).normalize();
+            var emission=materials==null?null:materials.emission(uvQuads.get(q),mode);
+            int vertexLight=emission==null?light:emission.apply(light);
             for(int j=0;j<4;j++) {
                 int i=mirrored?3-j:j;var p=quad.positions()[i];var uv=uvQuads.get(q).uvs()[i];
                 buffer.addVertex(pose.last().pose(),p[0],p[1],p[2]).setColor(black?0F:1F,black?0F:1F,black?0F:1F,alpha)
-                        .setUv(uv[0],uv[1]).setOverlay(overlay).setLight(light).setNormal(normal.x,normal.y,normal.z);
+                        .setUv(uv[0],uv[1]).setOverlay(overlay).setLight(vertexLight).setNormal(normal.x,normal.y,normal.z);
             }
         }
         pose.popPose();

@@ -135,7 +135,7 @@ public final class VerifyScopeReticles {
         var pso=AttachmentType.getAttachment("PSO1");var solo=gun("ScopeSoloFixture",1);var psoNode=node(pso,0);psoNode.dotFrame=2;
         solo.defaultAttachments=List.of(List.of(psoNode));var scope=GunSightState.scopeSight(solo);
         check(scope!=null,"PSO1 is its own active scope");var normal=render(solo,scope,false);
-        check(normal.materials.stream().anyMatch(s->s.contains("pso1dot2")),"actual PSO1 reticle uses per-node frame 2");
+        check(normal.materials.stream().anyMatch(s->s.contains(com.flansmod.client.render.Textures.forReticle(pso,2).toString())),"actual PSO1 reticle uses per-node frame 2");
         var mirrored=render(solo,scope,true);check(mirrored.points.size()==normal.points.size(),"mirrored hand retains all clipped geometry");
         for(int i=0;i<normal.points.size();i+=4){
             point(mirrored.points.get(i),normal.points.get(i+2),"mirrored reticle triangle reverses first corner");
@@ -148,15 +148,15 @@ public final class VerifyScopeReticles {
         check(GunSightState.selectedGroup(combo).sights().size()==2,"G33 shares the Cobra optical line");
         var g33=GunSightState.scopeSight(combo);check(g33!=null && g33.type()==magnifier,"G33 supplies glass behind forward red dot");
         var composite=render(combo,g33,false);
-        check(composite.materials.stream().anyMatch(s->s.contains("cobraekprefiexsightdot4")),"G33 carries the coaxial red dot's frame 4 into its glass");
-        check(composite.materials.stream().noneMatch(s->s.contains("g33dot")),"G33 DotModel None never invents a separate dot");
+        check(composite.materials.stream().anyMatch(s->s.contains(com.flansmod.client.render.Textures.forReticle(cobra,4).toString())),"G33 carries the coaxial red dot's frame 4 into its glass");
+        check(composite.materials.stream().noneMatch(s->s.contains(com.flansmod.client.render.ReticleResources.texture(magnifier,0).toString())),"G33 DotModel None never invents a separate dot");
         var offAxis=gun("ScopeSeparateLineFixture",3);offAxis.slots[0].x=combo.slots[0].x;offAxis.slots[0].y=combo.slots[0].y;
         offAxis.slots[2].y=1;offAxis.selectedSightGroup=1;
         offAxis.defaultAttachments=List.of(List.of(redNode),List.of(node(magnifier,1)),List.of(node(pso,2)));
         check(GunSightState.groups(offAxis).size()==2,"off-axis PSO1 occupies a separate selectable line");
         var selected=GunSightState.scopeSight(offAxis);check(selected!=null && selected.type()==magnifier,"G33 line stays active with another mounted scope");
         var isolated=render(offAxis,selected,false);
-        check(isolated.materials.stream().noneMatch(s->s.contains("pso1dot")),"unselected optical line contributes no reticle to G33");
+        check(isolated.materials.stream().noneMatch(s->s.contains(com.flansmod.client.render.ReticleResources.texture(pso,0).toString())),"unselected optical line contributes no reticle to G33");
         check(isolated.points.size()==composite.points.size(),"unselected scope cannot add vertices to the selected image");
     }
 

@@ -36,6 +36,7 @@ public final class MuzzleEffectsRenderer {
 	private static final Deque<WorldSmoke> SMOKE=new ArrayDeque<>();
 	private record WorldCase(FmumCasing effect,net.minecraft.world.phys.Vec3 origin) { }
 	private static final Deque<WorldCase> CASES=new ArrayDeque<>();
+	private static net.minecraft.client.multiplayer.ClientLevel effectsLevel;
 	private static LivingEntity renderingEntity;
 	private static int localSlot=-1;
 	private static GunType localGun;
@@ -64,7 +65,12 @@ public final class MuzzleEffectsRenderer {
 		var mc=Minecraft.getInstance();if(mc.player==null || mc.level==null)return;
 		if(!(InfoType.getType(mc.player.getMainHandItem()) instanceof GunType gun) || !packet.gun().equals(gun.shortName))return;
 		var round=com.flansmod.common.types.BulletType.getBullet(packet.round());
-		if(round!=null)GunAnimationRegistry.localPlayer(false).effects.requestCase(gun,round,packet.manual(),packet.seed());
+		if(round==null) {
+			com.flansmod.common.FlansMod.LOGGER.debug("[Casings] client cannot resolve case '{}' for {}",packet.round(),packet.gun());
+			return;
+		}
+		com.flansmod.common.FlansMod.LOGGER.debug("[Casings] client received case {} for {} manual={}",round.shortName,packet.gun(),packet.manual());
+		GunAnimationRegistry.localPlayer(false).effects.requestCase(gun,round,packet.manual(),packet.seed());
 	}
 	@SubscribeEvent(priority=EventPriority.LOWEST)
 	public static void beforeEntity(RenderLivingEvent.Pre<?,?> event) {
@@ -153,15 +159,24 @@ public final class MuzzleEffectsRenderer {
 		SMOKE.addLast(new WorldSmoke(new FmumSmoke(spec.model,texture,origin,spec.scale,spec.scaleEx,spec.vanishConst),position));
 	}
 	public static void tick() {
+		bindWorld();
+		if(Minecraft.getInstance().isPaused())return;
 		for(var smoke:SMOKE)smoke.effect.tick();
 		SMOKE.removeIf(smoke->!smoke.effect.alive());
 		// Cases collide with the world now, so the tick needs the level and the world-space
 		// origin their local position is relative to.
 		var level=Minecraft.getInstance().level;
-		for(var casing:CASES)casing.effect.tick(level,casing.origin.x,casing.origin.y,casing.origin.z);
+		for(var casing:CASES) {
+			casing.effect.tick(level,casing.origin.x,casing.origin.y,casing.origin.z);
+			CasingLandingSounds.play(casing.effect,casing.effect.takeLanding());
+		}
 		CASES.removeIf(casing->!casing.effect.alive());
 	}
-	public static void reset() { SMOKE.clear();CASES.clear();renderingEntity=null;localSlot=-1;localGun=null; }
+	private static void bindWorld() {
+		var level=Minecraft.getInstance().level;
+		if(effectsLevel!=level){SMOKE.clear();CASES.clear();effectsLevel=level;}
+	}
+	public static void reset() { SMOKE.clear();CASES.clear();effectsLevel=null;renderingEntity=null;localSlot=-1;localGun=null; }
 	private static boolean inHandPass() {
 		var mc=Minecraft.getInstance();
 		return mc.player!=null && mc.options.getCameraType().isFirstPerson() && !mc.options.hideGui
@@ -170,6 +185,7 @@ public final class MuzzleEffectsRenderer {
 	@SubscribeEvent
 	public static void worldSmoke(RenderLevelStageEvent event) {
 		if(event.getStage()!=RenderLevelStageEvent.Stage.AFTER_PARTICLES)return;
+		bindWorld();
 		renderingEntity=null;
 		boolean hand=inHandPass();
 		boolean worldSmoke=ShaderSmokeRenderer.inWorld(hand,ShaderMuzzleRenderer.shadersEnabled());
@@ -201,14 +217,23 @@ public final class MuzzleEffectsRenderer {
 			pose.popPose();
 		}
 	}
+	private static final java.util.Set<String> CASE_RENDER_WARNED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 	private static void renderCases(MultiBufferSource buffers,PoseStack pose,int overlay,float partial) {
 		var mc=Minecraft.getInstance();
 		var camera=mc.gameRenderer.getMainCamera().getPosition();
 		for(var entry:CASES) {
 			var casing=entry.effect;var type=casing.type;
 			var texture=Textures.of(type.bulletTexture,false);
-			var rig=ModelCache.rigForReference(type.bulletModel,1F,texture);
-			if(texture==null || rig==null || rig.quads.isEmpty())continue;
+			// 1.7.10 scales the case model by the definition's bulletScale (EFT writes 0.044 for
+			// brass, Octagon 0.1), then renders at 1/16. Passing 1F here drew every case about
+			// 10-23x too large.
+			var rig=ModelCache.rigForReference(type.bulletModel,type.bulletScale,texture);
+			if(texture==null || rig==null || rig.quads.isEmpty()) {
+				if(CASE_RENDER_WARNED.add(type.shortName))
+					com.flansmod.common.FlansMod.LOGGER.warn("[Casings] cannot draw case {}: texture={} rig={} quads={}",
+							type.shortName,texture,rig,rig==null?0:rig.quads.size());
+				continue;
+			}
 			// Lit by the light where the case lies, not by the player's hand. A case on the ground
 			// at night is dark, and one under a lamp is bright, which is what makes it read as an
 			// object in the world rather than an overlay.

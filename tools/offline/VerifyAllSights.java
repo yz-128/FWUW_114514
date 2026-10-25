@@ -65,7 +65,7 @@ public final class VerifyAllSights {
         var selected=GunSightState.scopeSight(gun);
         if(scope){check(selected!=null,at.shortName+" supplies selected scope");scopes++;}
         var glass=scope?ModelCache.rigForReference(at.scopeGlassModel,1F):null;
-        if(scope)check(glass!=null && !glass.quads.isEmpty(),at.shortName+" glass geometry");
+        if(scope){check(glass!=null && !glass.quads.isEmpty(),at.shortName+" glass geometry");glassDepth(at,rig,glass);}
         for(int frame=0;frame<Math.max(1,at.lightTextureCount);frame++) {
             if(dot) {
                 var skin=Textures.forReticle(at,frame,VerifyAllSights::exists);
@@ -92,6 +92,33 @@ public final class VerifyAllSights {
             }
         }
         System.out.printf(Locale.ROOT,"CHECK %s/%s dot=%s scope=%s frames=%d steps=%d axis=(%.5f,%.5f)%n",at.contentPack,at.shortName,dot,scope,at.lightTextureCount,Math.max(1,at.fovZoomLevels.length),center.y,center.z);
+    }
+    /** RenderGun 1935-1943 draws the complete authored glass model, including its recessed sides. */
+    static void glassDepth(AttachmentType type,BakedRig rig,BakedRig glass) {
+        var pupil=FmumSightPicture.vector(rig.animation,"pupilRefCenter",0,0,0);
+        var scale=FmumSightPicture.vector(rig.animation,"scopeGlassModelScale",1,1,1);
+        for(float angle:new float[]{0,20,-20})for(boolean mirrored:new boolean[]{false,true}) {
+            var mount=new Matrix4f().translate(.13F,-.27F,-1.2F).rotateY((float)Math.toRadians(90+angle)).rotateX(.17F);
+            var pose=new PoseStack();pose.mulPose(new Matrix4f(mount).scale(type.modelScale).translate(pupil).scale(scale));
+            var capture=new VerifyScopeComposition.Capture();FmumSightRenderer.renderLensSurface(pose,capture,glass,new Matrix4f(),1,mirrored);
+            check(capture.vertices.size()==glass.quads.size()*4,type.shortName+" complete original glass model emitted");
+            int index=0;
+            for(var q:glass.quads)for(int j=0;j<4;j++) {
+                int source=mirrored?3-j:j;
+                var p=q.positions()[source];
+                var expected=new Vector3f(p).mul(scale).add(pupil).mul(type.modelScale);mount.transformPosition(expected);
+                var emitted=capture.vertices.get(index++);
+                near(emitted[0],expected.x,type.shortName+" source glass X-depth");
+                near(emitted[1],expected.y,type.shortName+" source glass Y-depth");
+                near(emitted[2],expected.z,type.shortName+" source glass Z-depth");
+                // Preserve every face and wrapping UV extent, while adapting its authored
+                // axes to the modern framebuffer. Direction is independently GPU-tested.
+                var expectedUv=FmumSightRenderer.framebufferUv(glass,q.uvs()[source][0],q.uvs()[source][1],mirrored);
+                near(emitted[3],expectedUv[0],type.shortName+" oriented framebuffer U at vertex "+(index-1));
+                near(emitted[4],expectedUv[1],type.shortName+" oriented framebuffer V at vertex "+(index-1));
+            }
+            check(index==capture.vertices.size(),type.shortName+" every authored glass vertex checked");
+        }
     }
     static void projection() {
         var screen=new Matrix4f().perspective((float)Math.toRadians(70),16F/9F,.01F,100);
@@ -133,6 +160,7 @@ public final class VerifyAllSights {
     }
     public static void main(String[] args)throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
+        com.mojang.blaze3d.systems.RenderSystem.initRenderThread();
         for(String arg:args){var pack=new OfflinePack(Path.of(arg));pack.readTypes();packs.add(pack);}
         var sights=new ArrayList<>(AttachmentType.attachments);projection();
         for(var at:sights)if("sight".equalsIgnoreCase(at.itsType))optic(at);

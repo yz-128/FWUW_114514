@@ -141,7 +141,7 @@ public final class VerifyBulletBlocks {
   hit(distant,new Vec3(20000000,64.5,-19999999.5),new Vec3(20000008,64.5,-19999999.5),new BlockPos(20000003,64,-20000000),"double-precision far-world sweep");
   var empty=new Grid().put(1,0,0,Blocks.WATER);miss(empty,start,end,"water remains ignored by collider ray policy");
   check(chain.blocks.size()==4 && chain.getBlockState(new BlockPos(2,0,0)).is(Blocks.OAK_PLANKS),"sweeps never remove or mutate blocks");
-  var compiled=new ClassNode();try(var in=Files.newInputStream(Path.of("build/classes/java/main/com/flansmod/common/entity/EntityBullet.class"))){new ClassReader(in).accept(compiled,0);}
+  var compiled=new ClassNode();try(var in=VerifyBulletBlocks.class.getResourceAsStream("/com/flansmod/common/entity/EntityBullet.class")){new ClassReader(in).accept(compiled,0);}
   var calls=new ArrayList<String>();boolean resolves=false;
   for(var method:compiled.methods)if(method.name.equals("tick"))for(var ins:method.instructions)if(ins instanceof MethodInsnNode call){
    if(call.name.equals("bulletType"))resolves=true;

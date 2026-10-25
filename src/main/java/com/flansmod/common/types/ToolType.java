@@ -11,7 +11,7 @@ public class ToolType extends InfoType
 	public static final List<ToolType> tools = new ArrayList<>();
 
 	public boolean healPlayers = false, healDriveables = false;
-	public int healAmount = 0;
+	public float healAmount = 0F;
 	public int toolLife = 0;
 	public boolean destroyOnEmpty = true;
 	public int EUPerCharge = 0;
@@ -33,15 +33,15 @@ public class ToolType extends InfoType
 		{
 			switch(split[0])
 			{
-				case "HealPlayers" -> healPlayers = parseBool(split[1]);
-				case "HealDriveables" -> healDriveables = parseBool(split[1]);
-				case "HealAmount" -> healAmount = toInt(split[1]);
-				case "ToolLife" -> toolLife = toInt(split[1]);
+				case "Heal", "HealPlayers" -> healPlayers = parseBool(split[1]);
+				case "Repair", "RepairVehicles", "HealDriveables" -> healDriveables = parseBool(split[1]);
+				case "HealAmount", "RepairAmount" -> healAmount = toFloat(split[1]);
+				case "ToolLife", "ToolUses" -> toolLife = toInt(split[1]);
 				case "DestroyOnEmpty" -> destroyOnEmpty = parseBool(split[1]);
 				case "EUPerCharge" -> EUPerCharge = toInt(split[1]);
 				case "Parachute" -> parachute = parseBool(split[1]);
 				case "Remote" -> remote = parseBool(split[1]);
-				case "Foodness" -> foodness = toInt(split[1]);
+				case "Food", "Foodness" -> foodness = toInt(split[1]);
 			}
 		}
 		catch(Exception e)

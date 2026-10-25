@@ -68,6 +68,19 @@ public final class VerifyMuzzleEffects implements Opcodes {
   var base=new GunType(new TypeFile(EnumType.gun,"effect_fixture"));base.flashModel="EFTRDef.EftMuzzleFlash";base.flashTexture="effects/MuzzleFlash/Round";base.muzzleFlashScale=.5F;base.muzzleFlashVanishConst=.25F;
   var barrel=new AttachmentType(new TypeFile(EnumType.attachment,"effect_barrel"));barrel.shortName="effect_barrel";barrel.itsType="barrel";barrel.modelString="EFTRWea.6P20AK74MuzzleBrake";barrel.modelScale=.2F;barrel.muzzleFlashVanishConst=.5F;
   var muzzle=new AttachmentType(new TypeFile(EnumType.attachment,"effect_muzzle"));muzzle.shortName="effect_muzzle";muzzle.itsType="muzzle";muzzle.modelString=barrel.modelString;muzzle.modelScale=.2F;muzzle.muzzleFlashVanishConst=.4F;muzzle.numFlashTexture=4;muzzle.flashModelName=base.flashModel;muzzle.flashTextureName="effects/fixture";muzzle.muzzleSmoke.at=.03F;
+  // A suppressor authors its own FlashModel with scale 0; that must remove the flash entirely.
+  var quiet=new AttachmentType(new TypeFile(EnumType.attachment,"effect_quiet"));
+  quiet.shortName="effect_quiet";quiet.itsType="muzzle";quiet.modelString=barrel.modelString;quiet.modelScale=.22F;
+  quiet.flashModelName=base.flashModel;quiet.flashTextureName="effects/suppressed";quiet.muzzleFlashScale=0F;quiet.muzzleFlashVanishConst=.2F;
+  var quietBase=new GunType(new TypeFile(EnumType.gun,"effect_quiet_fixture"));
+  quietBase.flashModel="EFTRDef.EftMuzzleFlash";quietBase.flashTexture="effects/MuzzleFlash/Round";quietBase.muzzleFlashScale=.5F;quietBase.muzzleFlashVanishConst=.25F;
+  var qs=new ModifiableType.AttachableSlot();qs.x=.3F;qs.y=.2F;qs.rotate=90;quietBase.slots=new ModifiableType.AttachableSlot[]{qs};
+  var qn=new ModifiableType.DefaultAttachment();qn.name=quiet.shortName;qn.slot=0;qn.pos=.02F;quietBase.defaultAttachments.add(List.of(qn));
+  check(FmumMuzzlePose.flash(quietBase,new ModelGeometry.Model())==null,"attachment flash scale 0 removes the flash (suppressor)");
+  quiet.muzzleFlashScale=.2F;
+  var dim=FmumMuzzlePose.flash(quietBase,new ModelGeometry.Model());
+  check(dim!=null,"a non-zero attachment flash scale keeps a smaller flash");
+  close(dim.scale(),.2F,"attachment flash scale replaces the gun's scale");
   var a=new ModifiableType.AttachableSlot();a.x=.3F;a.y=.2F;a.rotate=90;base.slots=new ModifiableType.AttachableSlot[]{a};
   var b=new ModifiableType.AttachableSlot();b.x=.4F;b.y=.1F;b.rotate=20;barrel.slots=new ModifiableType.AttachableSlot[]{b};
   var n=new ModifiableType.DefaultAttachment();n.name=barrel.shortName;n.slot=0;n.pos=.05F;

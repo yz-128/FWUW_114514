@@ -24,6 +24,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -31,6 +32,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import com.flansmod.common.FlansMod;
+import com.flansmod.common.MechanicsSettings;
 import com.flansmod.common.types.BulletType;
 import com.flansmod.common.types.GunType;
 import com.flansmod.common.types.InfoType;
@@ -77,6 +79,14 @@ public class EntityBullet extends Projectile
 
 	/** Ticks since launch, which gates the shooter's own grace period. */
 	private int ticksInAir;
+
+	/** Block-breaking budget spent so far, and how many blocks this round has opened. */
+	private float blockSpent;
+	private int blocksBroken;
+
+	/** The same for the soft (pass-through) blocks carved out on the way. */
+	private float softSpent;
+	private int softBlocks;
 
 	/** Set once the round has spent its penetration and should stop on the next tick. */
 	private boolean detonated;
@@ -193,7 +203,10 @@ public class EntityBullet extends Projectile
 		// Cover AFTER a target must not reduce that target's damage. Only the distance actually
 		// flown is integrated; partial blocks continue naturally across subsequent ticks.
 		damage = SoftBlockBallistics.remainingDamage(level(), start,
-				entityHit == null ? end : entityHit.getLocation(), this, type, damage);
+				entityHit == null ? end : entityHit.getLocation(), this, type, damage, this::softCoverPassed);
+		if(level() instanceof ServerLevel server)
+			for(var hit:BulletImpacts.passedBlocks(server,start,entityHit==null?end:entityHit.getLocation(),this))
+				BulletImpacts.send(server,hit);
 		if(entityHit != null)
 		{
 			// Stop on the target whether or not the round survives it: 1.7.10 repositioned the
@@ -209,7 +222,7 @@ public class EntityBullet extends Projectile
 		if(blockHit.getType() != HitResult.Type.MISS)
 		{
 			setPos(blockHit.getLocation().x, blockHit.getLocation().y, blockHit.getLocation().z);
-			hitBlock(blockHit.getBlockPos());
+			hitBlock(blockHit);
 			return;
 		}
 
@@ -320,7 +333,14 @@ public class EntityBullet extends Projectile
 			if(type != null)
 			{
 				for(BulletType.HitEffect effect : type.hitEffects)
+				{
+					// Painkillers suppress the rounds' authored Slowness while their timer runs.
+					if(effect.effect().value() == net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN.value()
+							&& living instanceof net.minecraft.world.entity.player.Player player
+							&& com.flansmod.common.Fracture.painkiller(player))
+						continue;
 					living.addEffect(new MobEffectInstance(effect.effect(), effect.duration(), effect.amplifier()));
+				}
 				if(type.setEntitiesOnFire)
 					living.setRemainingFireTicks(20 * 5);
 			}
@@ -331,12 +351,95 @@ public class EntityBullet extends Projectile
 			detonated = true;
 	}
 
-	/** An obstructing block was hit after the requested soft-block trace filter. */
-	private void hitBlock(BlockPos pos)
+	/**
+	 * A pass-through (soft) block was crossed: open it when the round's power allows, so wooden
+	 * walls can be shot away. Leaves are never touched, and the damage attenuation is untouched —
+	 * the round still loses the cover's worth of damage even as it carves the hole.
+	 */
+	private void softCoverPassed(BlockPos pos, BlockState state)
 	{
-		if(type != null && type.breaksGlass)
+		if(!(level() instanceof ServerLevel server) || type == null || !type.breaksBlocks)
+			return;
+		// Destruction is off: the round still loses damage crossing soft cover, but nothing cracks.
+		if(!MechanicsSettings.blockBreakingEnabled())
+			return;
+		if(BulletBlockPenetration.isLeaves(state))
+			return;
+		float hardness = BulletBlockPenetration.hardness(state);
+		if(!BulletBlockPenetration.canBreakSoft(type, hardness))
 		{
-			var state = level().getBlockState(pos);
+			// Soft cover this round cannot open still shows a crack (it never breaks from it).
+			BlockDamage.chipOnly(server, pos, state, BulletBlockPenetration.blockPower(type));
+			return;
+		}
+		if(!BulletBlockPenetration.canContinueSoft(softSpent, hardness, softBlocks, type))
+			return;
+		softSpent += BulletBlockPenetration.softCost(hardness);
+		softBlocks++;
+		// Wood is chipped like everything else: several rounds are needed to open a plank wall.
+		if(BlockDamage.apply(server, pos, state, BulletBlockPenetration.blockPower(type)))
+		{
+			level().destroyBlock(pos, false);
+			level().playSound(null, pos, state.getSoundType().getBreakSound(), SoundSource.BLOCKS, 1F, 1F);
+		}
+	}
+
+	/** An obstructing block was hit after the requested soft-block trace filter. */
+	private void hitBlock(BlockHitResult hit)
+	{
+		BlockPos pos=hit.getBlockPos();
+		var state = level().getBlockState(pos);
+		if(level() instanceof ServerLevel server)BulletImpacts.send(server,hit);
+
+		// Leaves never stop or break a round. The pass-through tag already keeps them out of the
+		// trace; this guard covers a round spawned inside a leaf block or a trace started in one.
+		if(BulletBlockPenetration.isLeaves(state))
+			return;
+
+		// Blocks are opened by penetration level and calibre: the first decides how hard a block may
+		// be, the second how much harder a bigger round hits, and both feed the damage that survives
+		// the cover. A single round only chips the block unless it finishes it: the wall has hit
+		// points, so a rifle takes a couple of rounds and a pistol may never get through.
+		if(type != null && type.breaksBlocks)
+		{
+			float hardness = BulletBlockPenetration.hardness(state);
+			if(BulletBlockPenetration.canBreak(type, hardness))
+			{
+				float power = BulletBlockPenetration.blockPower(type);
+				boolean broke = level() instanceof ServerLevel server
+						&& BlockDamage.apply(server, pos, state, power);
+				if(broke)
+				{
+					boolean flyOn = BulletBlockPenetration.canContinue(blockSpent, hardness, blocksBroken, type);
+					blockSpent += BulletBlockPenetration.cost(hardness);
+					blocksBroken++;
+					damage = BulletBlockPenetration.remainingDamage(damage, hardness, type);
+					level().destroyBlock(pos, false);
+					if(level() instanceof ServerLevel)
+						level().playSound(null, pos, state.getSoundType().getBreakSound(), SoundSource.BLOCKS, 1F, 1F);
+					if(!flyOn)
+						detonated = true;
+				}
+				else
+				{
+					// The round spent itself on the wall: it stops where it hit and leaves a chip.
+					level().playSound(null, pos, state.getSoundType().getHitSound(), SoundSource.BLOCKS, 1F, 1F);
+					detonated = true;
+				}
+				return;
+			}
+			else if(level() instanceof ServerLevel chipServer && MechanicsSettings.blockBreakingEnabled())
+			{
+				// Too tough for this round, but the hit must still show: crack without any chance of
+				// breaking, so a pistol hitting stone and a rifle hitting metal are not silent.
+				BlockDamage.chipOnly(chipServer, pos, state, BulletBlockPenetration.blockPower(type));
+			}
+		}
+
+		// Legacy glass behaviour for a round that opted out of block breaking (the packs' original
+		// BreaksGlass flag), then the round stops in the wall as before.
+		if(type != null && type.breaksGlass && MechanicsSettings.legacyGlassBreaking())
+		{
 			// 1.7.10 tested the block's material for glass. The tag is the modern equivalent and
 			// covers stained glass and panes, which carry the same material.
 			if(state.is(BlockTags.IMPERMEABLE) || state.is(Blocks.GLASS) || state.is(Blocks.GLASS_PANE))

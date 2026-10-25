@@ -7,6 +7,12 @@ import com.flansmod.common.types.BulletType;
 import java.util.Random;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.Direction;
 
 /**
  * One ejected case in the world.
@@ -52,6 +58,16 @@ public final class FmumCasing {
 	public boolean grounded;
 	/** True once it has stopped completely; it then keeps its resting pose until it expires. */
 	private boolean settled;
+	public record Landing(BlockPos block,Vec3 point,BlockState surface,float speed) { }
+	private Landing landing;
+	private int landingSounds,lastLandingSound=-100;
+	/** Consumed once by the client tick, never by a render frame. */
+	public Landing takeLanding() {var result=landing;landing=null;return result;}
+	/** Ignore resting gravity contacts and small/repeated bounces. At most three audible landings. */
+	public boolean audibleLanding(Landing hit) {
+		if(hit==null||!Float.isFinite(hit.speed())||hit.speed()<.04F||age-lastLandingSound<4||landingSounds>=3)return false;
+		lastLandingSound=age;landingSounds++;return true;
+	}
 
 	public FmumCasing(BulletType type,Model model,Matrix4f gun,boolean manual,long seed,float roll) {
 		this.type=type;
@@ -86,8 +102,9 @@ public final class FmumCasing {
 	 * @param worldY world-space Y of {@link #position}'s origin
 	 * @param worldZ world-space Z of {@link #position}'s origin
 	 */
-	public void tick(net.minecraft.world.level.Level level,double worldX,double worldY,double worldZ) {
+	public void tick(BlockGetter level,double worldX,double worldY,double worldZ) {
 		if(!alive())return;
+		landing=null;
 		age++;lastPosition.set(position);lastSpin=spin;
 		if(settled)return;
 
@@ -102,8 +119,14 @@ public final class FmumCasing {
 			boolean embedded=inside(level,worldX+position.x,worldY+position.y,worldZ+position.z);
 			if(!embedded) {
 				// One axis at a time, so a case sliding along a wall keeps the other component.
-				if(solid(level,worldX+position.x,worldY+position.y+dy,worldZ+position.z)) {
-					if(dy<0F)onGround=true;
+				var floor=floor(level,worldX+position.x,worldY+position.y,worldZ+position.z,dy);
+				if(floor!=null) {
+					onGround=true;
+					landing=new Landing(floor.getBlockPos(),floor.getLocation(),level.getBlockState(floor.getBlockPos()),-velocity.y);
+					dy=(float)(floor.getLocation().y+RADIUS-worldY-position.y);
+					velocity.y=-velocity.y*BOUNCE;
+					if(Math.abs(velocity.y)<SLEEP_SPEED)velocity.y=0F;
+				} else if(dy>0F&&solid(level,worldX+position.x,worldY+position.y+dy,worldZ+position.z)) {
 					dy=0F;velocity.y=-velocity.y*BOUNCE;
 					if(Math.abs(velocity.y)<SLEEP_SPEED)velocity.y=0F;
 				}
@@ -128,23 +151,55 @@ public final class FmumCasing {
 		spin+=spinVelocity;
 	}
 
+	/** Sweep the foot to avoid tunnelling through carpet/slabs during a fast fall. */
+	private static BlockHitResult floor(BlockGetter level,double x,double y,double z,float dy) {
+		if(dy>=0F)return null;
+		var from=new Vec3(x,y-RADIUS+.0001,z);var to=new Vec3(x,y+dy-RADIUS,z);
+		return BlockGetter.traverseBlocks(from,to,Boolean.TRUE,(ignored,pos)->{
+			var hit=level.getBlockState(pos).getCollisionShape(level,pos).clip(from,to,pos);
+			return hit!=null&&!hit.isInside()&&hit.getDirection()==Direction.UP
+					?new BlockHitResult(hit.getLocation(),hit.getDirection(),pos.immutable(),false):null;
+		},ignored->null);
+	}
+
 	/** True when the point is inside a block's collision shape, with a little slack for the case. */
-	private static boolean solid(net.minecraft.world.level.Level level,double x,double y,double z) {
+	private static boolean solid(BlockGetter level,double x,double y,double z) {
 		var pos=net.minecraft.core.BlockPos.containing(x,y,z);
 		var state=level.getBlockState(pos);
 		if(state.isAir())return false;
 		var shape=state.getCollisionShape(level,pos);
 		if(shape.isEmpty())return false;
-		return shape.bounds().move(pos).inflate(RADIUS).contains(x,y,z);
+		return shape.toAabbs().stream().anyMatch(box->box.move(pos).inflate(RADIUS).contains(x,y,z));
 	}
 
 	/** True when the point is inside a solid block at all, without the extra radius. */
-	private static boolean inside(net.minecraft.world.level.Level level,double x,double y,double z) {
+	private static boolean inside(BlockGetter level,double x,double y,double z) {
 		var pos=net.minecraft.core.BlockPos.containing(x,y,z);
 		var state=level.getBlockState(pos);
 		if(state.isAir())return false;
 		var shape=state.getCollisionShape(level,pos);
-		return !shape.isEmpty() && shape.bounds().move(pos).contains(x,y,z);
+		return shape.toAabbs().stream().anyMatch(box->box.move(pos).contains(x,y,z));
+	}
+
+	/**
+	 * True when a landing contact sits under the water line.
+	 *
+	 * <p>Both the block the case landed on and the block above it are checked, and each column
+	 * only counts as water while the contact point is below that column's fluid surface. That
+	 * keeps a case landing on a waterlogged slab inside a pond silent, while a dry top face that
+	 * clears the water line — a waterlogged fence top, the upper half of a waterlogged stair —
+	 * still rings.
+	 */
+	public static boolean submerged(BlockGetter level,Vec3 contact) {
+		var below=net.minecraft.core.BlockPos.containing(contact.x,contact.y-1.0E-4,contact.z);
+		var above=net.minecraft.core.BlockPos.containing(contact.x,contact.y+1.0E-3,contact.z);
+		return wet(level,below,contact)||wet(level,above,contact);
+	}
+
+	private static boolean wet(BlockGetter level,net.minecraft.core.BlockPos pos,Vec3 contact) {
+		var fluid=level.getFluidState(pos);
+		if(fluid.isEmpty()||!fluid.is(net.minecraft.tags.FluidTags.WATER))return false;
+		return contact.y<pos.getY()+fluid.getHeight(level,pos)-1.0E-3;
 	}
 
 	public boolean alive() {return age<lifetime;}

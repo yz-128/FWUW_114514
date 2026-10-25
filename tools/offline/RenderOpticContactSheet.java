@@ -45,6 +45,7 @@ public final class RenderOpticContactSheet {
     }
     public static void main(String[] args)throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
+        com.mojang.blaze3d.systems.RenderSystem.initRenderThread();
         List<OfflinePack> packs=new ArrayList<>();for(int i=1;i<args.length;i++){var pack=new OfflinePack(Path.of(args[i]));pack.readTypes();packs.add(pack);}
         var optics=AttachmentType.attachments.stream().filter(at->"sight".equalsIgnoreCase(at.itsType) && !at.isFoldedVariant()
                 && (at.lightStuffModel!=null || at.scopeGlassModel!=null)).toList();

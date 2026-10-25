@@ -85,8 +85,8 @@ public final class FmumFirstPersonPose
 	 * ray misses its own aperture entirely.
 	 *
 	 * <p>Passing the camera's actual gun-space position keeps the original's translate/rotate/undo
-	 * structure while making it exact for any pose. X is left alone on purpose: that distance is
-	 * the shooter's eye relief, which the pack shapes through the mount.
+	 * structure while making it exact for any pose. The placement already applies the author's
+	 * aimingTranslate, including its axial component; aiming must not undo that eye relief.
 	 */
 	public static Matrix4f aim(Matrix4f pose, ModifiableType type, float ads, org.joml.Vector3f eye)
 	{

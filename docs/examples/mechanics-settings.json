@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "barrelHeatEnabled": true,
+  "blockBreakingEnabled": true,
+  "heatPerShotScale": 1.0,
+  "heatCoolRateScale": 1.0,
+  "healthPerHardness": 4.0,
+  "plasticToughness": 5.0,
+  "glassToughness": 0.35,
+  "woodToughness": 1.0,
+  "stoneToughness": 1.5,
+  "metalToughness": 2.5,
+  "maxSoftBlocksPerShot": 4,
+  "maxBlocksPerShot": 6
+}

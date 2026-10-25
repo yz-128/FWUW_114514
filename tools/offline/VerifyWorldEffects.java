@@ -57,7 +57,7 @@ public final class VerifyWorldEffects {
   }
   var v=view(camera(53,31));var fixture=new Vector3f(2,1,-5);
   check(new Matrix4f(v).mul(v).transformPosition(new Vector3f(fixture)).distance(v.transformPosition(new Vector3f(fixture)))>1F,"regression fixture detects the previous double rotation");
-  var node=new ClassNode();try(var in=Files.newInputStream(Path.of("build/classes/java/main/com/flansmod/client/render/MuzzleEffectsRenderer.class"))){new ClassReader(in).accept(node,0);}
+  var node=new ClassNode();try(var in=VerifyWorldEffects.class.getResourceAsStream("/com/flansmod/client/render/MuzzleEffectsRenderer.class")){new ClassReader(in).accept(node,0);}
   int birth=0,draw=0;for(var method:node.methods)for(var instruction:method.instructions)if(instruction instanceof MethodInsnNode call && call.owner.endsWith("FmumWorldEffectsPose")){
    if(call.name.equals("gunToCameraRelativeWorld"))birth++;if(call.name.equals("worldStage"))draw++;
   }

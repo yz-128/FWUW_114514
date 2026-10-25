@@ -54,6 +54,24 @@ public final class DebugCapture
 	public static final int THIRD_PERSON_AT_TICK = 260;
 
 	/**
+	 * Tick at which the compatibility round throws a real grenade.
+	 *
+	 * <p>Only used with {@code flansmod.compatScenes}: the scene exercises the entity renderer,
+	 * the ballistics and the explosion in the same run as the optimisation mods, through the same
+	 * API the grenade item uses. Nothing is thrown by an ordinary self-verification run.
+	 */
+	public static final int GRENADE_AT_TICK = 500;
+
+	/**
+	 * Tick at which the compatibility round fits a scope, so the ADS scene goes through the
+	 * independent scope camera ({@code ScopeWorldTexture}) and not just the iron-sight pose.
+	 */
+	public static final int OPTIC_AT_TICK = 430;
+	/** After the last captured frame; restores the player's inventory. */
+	public static final int COMPAT_END_TICK = 600;
+	private static final boolean COMPAT_SCENES = Boolean.getBoolean("flansmod.compatScenes");
+
+	/**
 	 * Tick at which every gun's model is baked and reported.
 	 *
 	 * <p>Baking is what reads the model class and, with it, checks the model's declared texture size
@@ -163,13 +181,38 @@ public final class DebugCapture
 			FlansMod.LOGGER.info("[DebugCapture] Final. Held=" + player.getMainHandItem().getItem()
 					+ " chambers=" + describeMagazine(player));
 			reportTarget(player);
-			restoreInventorySnapshot(player);
-			KITTED.remove(id);          // one report per session
+			// The compatibility scenes run after this report and need both the tick clock and the
+			// kit, so the inventory is restored at the end of the compat run instead. An ordinary
+			// run stops here exactly as before.
+			if(!COMPAT_SCENES)
+			{
+				restoreInventorySnapshot(player);
+				KITTED.remove(id);          // one report per session
+			}
 			return;
 		}
 		if(tick == DISPLAY_AT_TICK)
 		{
 			spawnDisplayRound(player);
+			return;
+		}
+		if(COMPAT_SCENES && tick == OPTIC_AT_TICK)
+		{
+			compatOptic(player);
+			return;
+		}
+		if(COMPAT_SCENES && tick == GRENADE_AT_TICK)
+		{
+			compatGrenade(player);
+			return;
+		}
+		if(COMPAT_SCENES && tick == COMPAT_END_TICK)
+		{
+			// The scenes are over: put the player's own inventory back, exactly what an ordinary
+			// run does at its report, and stop the clock.
+			restoreInventorySnapshot(player);
+			KITTED.remove(id);
+			FlansMod.LOGGER.info("[DebugCompat] compat session finished, inventory restored");
 			return;
 		}
 		if(tick == THIRD_PERSON_AT_TICK)
@@ -279,6 +322,89 @@ public final class DebugCapture
 	 * <p>Only ever runs under the debug flag, and only on the server: the client picks it up through
 	 * the normal spawn packet, which is the same path a fired round takes.
 	 */
+	/**
+	 * Fits the first compatible scope for the ADS scene.
+	 *
+	 * <p>The scene has to reach {@code ScopeWorldTexture}'s independent camera, which only runs for a
+	 * mounted sight with a scope, so the harness installs one through the same attachment
+	 * transaction the gunsmith uses. Reason strings are logged either way: if nothing fits, the ADS
+	 * frames are still a valid visual check, just without the extra camera pass.
+	 */
+	private static void compatOptic(ServerPlayer player)
+	{
+		ItemStack gunStack = player.getMainHandItem();
+		var gun = com.flansmod.common.GunActions.firearm(gunStack);
+		if(gun == null)
+		{
+			FlansMod.LOGGER.info("[DebugCompat] optic scene: no gun in hand");
+			return;
+		}
+		// A short name can appear in more than one pack, and the item registry resolves to one of
+		// them; the transaction compares the item's own type, so resolve it the same way here.
+		var seen = new java.util.HashSet<String>();
+		for(com.flansmod.common.types.InfoType type : com.flansmod.common.types.InfoType.infoTypes)
+		{
+			if(!(type instanceof com.flansmod.common.types.AttachmentType candidate))
+				continue;
+			if(!candidate.isAimingSight()
+					|| (candidate.zoomLevel <= 1F && candidate.scopeGlassModel == null))
+				continue;
+			if(!seen.add(candidate.shortName))
+				continue;
+			ItemStack optic = itemFor(registryPath(candidate.shortName), 1);
+			if(optic.isEmpty() || !(com.flansmod.common.types.InfoType.getType(optic)
+					instanceof com.flansmod.common.types.AttachmentType part))
+				continue;
+			int slot = -1;
+			for(int s = 0; s < gun.slots.length; s++)
+				if(com.flansmod.common.GunAttachments.allowed(gun, s, part)) { slot = s; break; }
+			if(slot < 0)
+				continue;
+			int inventorySlot = -1;
+			for(int i = 9; i < 36; i++)
+				if(player.getInventory().getItem(i).isEmpty()) { inventorySlot = i; break; }
+			if(inventorySlot < 0)
+			{
+				FlansMod.LOGGER.info("[DebugCompat] optic scene: no free inventory slot");
+				return;
+			}
+			player.getInventory().setItem(inventorySlot, optic);
+			String reason = com.flansmod.common.GunAttachmentTransaction.apply(player.getInventory(),
+					player.getInventory().selected, com.flansmod.common.GunAttachments.revision(gunStack),
+					com.flansmod.common.network.GunModificationPayload.INSTALL, new int[0], slot, inventorySlot,
+					0, 0, player.registryAccess());
+			FlansMod.LOGGER.info("[DebugCompat] optic scene: " + part.shortName + " on slot " + slot
+					+ " -> " + (reason == null ? "installed" : reason));
+			if(reason == null)
+				return;
+			player.getInventory().setItem(inventorySlot, ItemStack.EMPTY);
+		}
+		FlansMod.LOGGER.info("[DebugCompat] optic scene: no compatible sight could be installed");
+	}
+
+	/**
+	 * Throws the first throwable pack grenade for the compatibility scene.
+	 *
+	 * <p>Server-side by design: the entity, its ballistics and the explosion are what the scene is
+	 * checking, and {@code Grenades.throwGrenade} is the same entry point the grenade item calls.
+	 */
+	private static void compatGrenade(ServerPlayer player)
+	{
+		for(com.flansmod.common.types.InfoType type : com.flansmod.common.types.InfoType.infoTypes)
+		{
+			if(!(type instanceof com.flansmod.common.types.GrenadeType grenade) || !grenade.canThrow)
+				continue;
+			ItemStack stack = itemFor(registryPath(grenade.shortName), 1);
+			if(stack.isEmpty())
+				continue;
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
+			var result = com.flansmod.common.Grenades.throwGrenade(player.level(), player, stack, grenade);
+			FlansMod.LOGGER.info("[DebugCompat] grenade scene: " + grenade.shortName + " -> " + result);
+			return;
+		}
+		FlansMod.LOGGER.info("[DebugCompat] grenade scene: no throwable grenade in the loaded packs");
+	}
+
 	private static void spawnDisplayRound(ServerPlayer player)
 	{
 		ItemStack held = player.getMainHandItem();

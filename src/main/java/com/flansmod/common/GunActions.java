@@ -75,13 +75,37 @@ public final class GunActions {
 		data.gunAction.request(requested, length);
 		return true;
 	}
+	/**
+	 * FMUM ItemGun dismissed a manual stow when the fire or the aim key was down
+	 * ({@code ItemGun.java:198-202} in the 1.7.10 source): resting and pressing either key turns
+	 * the rest into an unrest. Firing already does that through {@code GunFiring.onTriggerPull};
+	 * aiming had no way out, so a gun stowed with the rest key could not be raised again.
+	 *
+	 * @return true when this call dismissed the stow
+	 */
+	public static boolean dismissManualRestOnAim(GunActionState state, boolean aiming) {
+		if(!aiming || state.operation != Operation.REST || !state.manualRest) return false;
+		state.resume();
+		return true;
+	}
+	/**
+	 * Whether the aim progress may rise this tick.
+	 *
+	 * <p>A sight fold or switch must not drop the player out of ADS: the gesture animates the optic
+	 * while the eye stays on it, so the fold flag is deliberately not consulted here. Only the
+	 * manual stow and the take-out motion stop the aim.
+	 */
+	public static boolean aimingAllowed(GunActionState state, boolean aiming) {
+		return aiming && !state.manualRest && state.takeOut == 0F;
+	}
 	public static void tick(Player player, PlayerData data) {
 		ensureHeld(player, data);
 		if(data.actionTick == player.tickCount) return;
 		data.actionTick = player.tickCount;
 		GunType gun = data.actionGun;
 		if(gun == null) return;
-		data.gunAimProgress=Math.clamp(data.gunAimProgress+(data.gunAimDown && !data.sightFolding(player) && !data.gunAction.manualRest && data.gunAction.takeOut==0F?.2F:-.2F),0F,1F);
+		dismissManualRestOnAim(data.gunAction, data.gunAimDown);
+		data.gunAimProgress=Math.clamp(data.gunAimProgress+(aimingAllowed(data.gunAction,data.gunAimDown)?.2F:-.2F),0F,1F);
 		Operation operation = data.gunAction.operation == Operation.NONE && data.gunAction.queued != Operation.NONE
 				? data.gunAction.queued : data.gunAction.operation;
 		boolean ammo = operation == Operation.CHECK_AMMO;
@@ -138,7 +162,25 @@ public final class GunActions {
 			return Component.empty();
 		if(!state.startsWith("message.") && !state.startsWith("item.") && !state.startsWith("gun.")
 				&& !state.startsWith("mag."))
-			return Component.literal(state);
+		{
+			// EFT writes the magazine inspection states as plain English ("Empty", "Not Much",
+			// "About Half", "Nearly full", "Full"). 1.7.10 printed them verbatim, which left a
+			// Chinese client reading English. Map the authored vocabulary to language keys; an
+			// unknown pack label still prints exactly as written.
+			String key = switch(state.trim().toLowerCase(java.util.Locale.ROOT))
+			{
+				case "empty" -> "message.ammo.empty";
+				case "not much" -> "message.ammo.not_much";
+				case "about half" -> "message.ammo.about_half";
+				case "nearly full" -> "message.ammo.nearly_full";
+				case "almost full" -> "message.ammo.nearly_full";
+				case "full" -> "message.ammo.full";
+				case "low" -> "message.ammo.low";
+				default -> null;
+			};
+			return key == null ? Component.literal(state)
+					: Component.translatableWithFallback(key, state);
+		}
 		return Component.translatableWithFallback(state, state);
 	}
 	public static void sound(Player player, String name,float range) {
